@@ -4,6 +4,9 @@ import { heroArts } from './heroes';
 import { Raster } from './raster';
 import { GROUND_VARIANTS, groundFrame, groundFrames, saplingFrames, tuftFrames, waterFrames } from './world';
 import { ramp } from './color';
+import { bigIpeFrame, tocaFrame } from './lobby';
+import { parseLevel } from '../core/levelParser';
+import { lobby } from '../levels/lobby';
 
 describe('Raster', () => {
   it('elipse pinta dentro e contorno fica só por fora', () => {
@@ -68,5 +71,23 @@ describe('mundo', () => {
       for (let y = 0; y < layer.h; y++) if ((layer.get(0, y) === null) === (layer.get(BG_W - 1, y) === null)) same++;
       expect(same / layer.h).toBeGreaterThan(0.9);
     }
+  });
+});
+
+describe('lobby', () => {
+  it('ipê e toca têm desenho e pé na última linha', () => {
+    for (const r of [bigIpeFrame(), tocaFrame()]) {
+      expect(r.opaqueCount()).toBeGreaterThan(500);
+      let base = 0;
+      for (let x = 0; x < r.w; x++) if (r.get(x, r.h - 1) !== null) base++;
+      expect(base).toBeGreaterThan(0);
+    }
+  });
+
+  it('o mapa do lobby é uma tela com chão inteiro e início', () => {
+    const lvl = parseLevel(lobby);
+    expect([lvl.width, lvl.height]).toEqual([30, 17]);
+    expect(lvl.start).toEqual({ tx: 11, ty: 12 });
+    expect(lvl.solids[0]).toMatchObject({ tx: 0, ty: 13, w: 30 });
   });
 });

@@ -1,8 +1,7 @@
 import Phaser from 'phaser';
 import { GAME_HEIGHT, GAME_WIDTH, TILE } from '../config';
-import { groundFrame } from '../art/world';
 import { hash2 } from '../art/rng';
-import { cellAt, connectedBreakables, parseLevel, type ParsedLevel, type TilePos } from '../core/levelParser';
+import { cellAt, connectedBreakables, parseLevel, type ParsedLevel } from '../core/levelParser';
 import type { Hero, LevelQuery } from '../heroes/Hero';
 import { Lontra } from '../heroes/Lontra';
 import { Mico } from '../heroes/Mico';
@@ -10,20 +9,17 @@ import { Onca } from '../heroes/Onca';
 import { Controls } from '../input/Controls';
 import { salaDeTeste } from '../levels/salaDeTeste';
 import { TeamManager } from '../team/TeamManager';
+import { LeafCurtain } from '../ui/LeafCurtain';
+import { buildParallax, buildTerrain, DEPTH, tileCenter, type Parallax } from './terrain';
 
 type Spr = Phaser.Physics.Arcade.Sprite;
 type Emitter = Phaser.GameObjects.Particles.ParticleEmitter;
-
-const tileCenter = (p: TilePos) => ({ x: p.tx * TILE + TILE / 2, y: p.ty * TILE + TILE / 2 });
-
-// Camadas de desenho, de trás pra frente
-const DEPTH = { bg: -10, deco: 1, object: 2, hero: 3, water: 5, fx: 6, light: 7 } as const;
 
 export class GameScene extends Phaser.Scene implements LevelQuery {
   private level!: ParsedLevel;
   private team!: TeamManager;
   private controls!: Controls;
-  private parallax: { layer: Phaser.GameObjects.TileSprite; factor: number }[] = [];
+  private parallax: Parallax[] = [];
   private fx!: Record<'leaves' | 'dust' | 'embers' | 'petals' | 'sparkle' | 'splash', Emitter>;
   private breakables = new Map<string, Spr>();
   /** Sementes pegas desde o último checkpoint: voltam pro mapa se o time morrer */
@@ -36,7 +32,8 @@ export class GameScene extends Phaser.Scene implements LevelQuery {
     super('Game');
   }
 
-  create(): void {
+  /** `curtain`: veio do lobby pela trilha, então começa com a cortina de folhas fechada. */
+  create(data?: { curtain?: boolean }): void {
     this.level = parseLevel(salaDeTeste);
     const worldW = this.level.width * TILE;
     const worldH = this.level.height * TILE;
@@ -44,7 +41,7 @@ export class GameScene extends Phaser.Scene implements LevelQuery {
     this.physics.world.setBounds(0, 0, worldW, worldH + TILE * 4);
 
     this.buildBackground();
-    const solids = this.buildTerrain();
+    const solids = buildTerrain(this, this.level);
     this.createEffects();
 
     const breakables = this.physics.add.staticGroup();
@@ -113,7 +110,12 @@ export class GameScene extends Phaser.Scene implements LevelQuery {
 
     this.controls = new Controls(this);
     this.events.on(Phaser.Scenes.Events.RESUME, () => this.controls.reset());
-    this.scene.launch('Hud');
+    if (data?.curtain) {
+      // A HUD entra quando a cortina termina de abrir, pra não ficar boiando em cima das folhas
+      new LeafCurtain(this).cover().open().then(() => this.scene.launch('Hud'));
+    } else {
+      this.scene.launch('Hud');
+    }
 
     // Pra testar pelo console do navegador
     (window as unknown as { __ibiacy?: unknown }).__ibiacy = { scene: this, team: this.team };
@@ -151,11 +153,7 @@ export class GameScene extends Phaser.Scene implements LevelQuery {
   // ---------- montagem ----------
 
   private buildBackground(): void {
-    const layers: [string, number][] = [['bg-sky', 0.02], ['bg-mountain', 0.08], ['bg-canopy', 0.2], ['bg-bush', 0.4]];
-    layers.forEach(([key, factor], i) => {
-      const layer = this.add.tileSprite(0, 0, GAME_WIDTH, GAME_HEIGHT, key).setOrigin(0).setScrollFactor(0).setDepth(DEPTH.bg + i);
-      this.parallax.push({ layer, factor });
-    });
+    this.parallax = buildParallax(this);
     // Raios de sol entre as copas, respirando devagar
     const rays = this.add.image(0, 0, 'rays').setOrigin(0).setScrollFactor(0).setDepth(DEPTH.bg + 5).setBlendMode(Phaser.BlendModes.ADD).setAlpha(0.22);
     this.tweens.add({ targets: rays, alpha: 0.1, duration: 4000, yoyo: true, repeat: -1, ease: 'Sine.InOut' });
@@ -171,53 +169,6 @@ export class GameScene extends Phaser.Scene implements LevelQuery {
       frequency: 220,
       blendMode: Phaser.BlendModes.ADD,
     }).setScrollFactor(0).setDepth(DEPTH.bg + 6);
-  }
-
-  private buildTerrain(): Phaser.Physics.Arcade.StaticGroup {
-    const lvl = this.level;
-    const solid = (tx: number, ty: number) => cellAt(lvl, tx, ty) === '#';
-    lvl.grid.forEach((row, ty) => {
-      [...row].forEach((ch, tx) => {
-        const { x, y } = tileCenter({ tx, ty });
-        if (ch === '#') {
-          const sides = { top: !solid(tx, ty - 1), bottom: !solid(tx, ty + 1) && ty + 1 < lvl.height, left: !solid(tx - 1, ty), right: !solid(tx + 1, ty) };
-          // Quanto mais fundo na terra, mais escuro: dá profundidade sem desenhar tile novo
-          let depth = 0;
-          while (depth < 5 && solid(tx, ty - depth - 1)) depth++;
-          const shade = Phaser.Display.Color.Interpolate.ColorWithColor(
-            Phaser.Display.Color.ValueToColor(0xffffff), Phaser.Display.Color.ValueToColor(0x5a4a66), 6, depth);
-          this.add.image(x, y, 'ground', groundFrame(sides, hash2(tx, ty)))
-            .setTint(Phaser.Display.Color.GetColor(shade.r, shade.g, shade.b));
-          // Tufo de grama, flor ou samambaia em cima de parte do chão
-          const h = hash2(tx * 3, ty * 5);
-          if (sides.top && h % 5 < 2 && cellAt(lvl, tx, ty - 1) === '.') {
-            this.add.sprite(x + ((h >>> 4) % 9) - 4, y - TILE / 2 + 1, 'tuft').setOrigin(0.5, 1).setDepth(DEPTH.deco)
-              .play({ key: `tuft-${(h >>> 8) % 4}`, startFrame: (h >>> 12) % 4 });
-          }
-        } else if (ch === 'V') {
-          this.add.sprite(x, y, 'vine').setDepth(DEPTH.deco).play('vine-sway');
-        } else if (ch === '~') {
-          // Superfície só onde tem ar em cima (embaixo da pedra não tem)
-          const above = cellAt(lvl, tx, ty - 1);
-          const surface = above !== '~' && above !== '#';
-          let depth = 0;
-          // Embaixo da pedra também conta como fundo (fica escuro)
-          while (depth < 6 && '~#'.includes(cellAt(lvl, tx, ty - depth - 1))) depth++;
-          const deep = Phaser.Display.Color.Interpolate.ColorWithColor(
-            Phaser.Display.Color.ValueToColor(0xffffff), Phaser.Display.Color.ValueToColor(0x5a7aa8), 7, depth);
-          this.add.sprite(x, y, 'water').setDepth(DEPTH.water).setAlpha(0.72)
-            .setTint(Phaser.Display.Color.GetColor(deep.r, deep.g, deep.b))
-            .play({ key: surface ? 'water-top' : 'water-deep', startFrame: tx % 4 });
-        }
-      });
-    });
-
-    // Corpo de colisão por faixa contínua de chão (invisível; o desenho é por tile)
-    const solids = this.physics.add.staticGroup();
-    for (const r of lvl.solids) {
-      solids.add(this.add.zone((r.tx + r.w / 2) * TILE, (r.ty + r.h / 2) * TILE, r.w * TILE, r.h * TILE));
-    }
-    return solids;
   }
 
   private createEffects(): void {

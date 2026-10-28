@@ -1,15 +1,17 @@
 import Phaser from 'phaser';
-import { GAME_HEIGHT, GAME_WIDTH, GRAVITY, PIXEL_FONT } from './config';
+import { GAME_HEIGHT, GAME_WIDTH, GRAVITY } from './config';
+import { FONT_TEXT, FONT_TITLE } from './ui/tokens';
 import { BootScene } from './scenes/BootScene';
 import { GameScene } from './scenes/GameScene';
 import { HudScene } from './scenes/HudScene';
 import { GalleryScene } from './scenes/GalleryScene';
+import { LobbyScene } from './scenes/LobbyScene';
 import { PauseScene } from './scenes/PauseScene';
 
-// O Phaser desenha texto em canvas: a fonte precisa estar carregada antes, senão sai a padrão.
+// O Phaser desenha texto em canvas: as fontes precisam estar carregadas antes, senão sai a padrão.
 // Sem internet, segue com a fonte de reserva depois de 1,5 s.
 const fontReady = Promise.race([
-  document.fonts.load(`16px ${PIXEL_FONT}`),
+  Promise.all([document.fonts.load(`16px ${FONT_TEXT}`), document.fonts.load(`16px ${FONT_TITLE}`)]),
   new Promise((resolve) => setTimeout(resolve, 1500)),
 ]);
 
@@ -30,5 +32,5 @@ fontReady.then(() => new Phaser.Game({
     },
   },
   scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
-  scene: [BootScene, GameScene, HudScene, PauseScene, GalleryScene],
+  scene: [BootScene, LobbyScene, GameScene, HudScene, PauseScene, GalleryScene],
 }));

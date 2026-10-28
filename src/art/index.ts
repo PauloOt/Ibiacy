@@ -3,6 +3,7 @@ import { GAME_HEIGHT, GAME_WIDTH } from '../config';
 import { bushLayer, canopyLayer, mountainLayer, skyLayer } from './background';
 import { addAnim, addCanvasTexture, addSheet, bakeHero } from './bake';
 import { heroArts } from './heroes';
+import { bigIpeFrame, tocaFrame } from './lobby';
 import {
   fireFrames,
   groundFrames,
@@ -39,6 +40,8 @@ export function bakeAll(scene: Phaser.Scene): void {
   addAnim(scene, 'sapling-idle', 'sapling', [0, 1], 2);
   addAnim(scene, 'sapling-grow', 'sapling', [2, 3, 4, 5, 6, 7], 12, false);
   addAnim(scene, 'tree-idle', 'sapling', [8, 9], 2);
+  addSheet(scene, 'ipe-grande', [bigIpeFrame()]);
+  addSheet(scene, 'toca', [tocaFrame()]);
   addSheet(scene, 'heart', heartFrames());
   for (const [name, r] of Object.entries(particleFrames())) addSheet(scene, `p-${name}`, [r]);
 

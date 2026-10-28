@@ -8,7 +8,7 @@ Escopo completo em [docs/escopo-mvp.md](docs/escopo-mvp.md). Sessões em [docs/s
 - [x] **1b. Pixel art animada** — heróis, cenário, fundo em camadas, luz e partículas, no estilo do Arperium. ([sessão](docs/sessoes/2026-10-28-pixel-art.md))
 - [ ] **2. Fase 1 no Tiled** — os 5 trechos do escopo, ~30 sementes, 3 checkpoints.
 - [ ] **3. Ameaças completas** — frente de fogo que avança, máquina de desmatamento, correnteza.
-- [ ] **4. Telas** — menu inicial, tela de final com tempo e sementes.
+- [ ] **4. Lobby e telas** — lobby andável feito (clareira com ipê e toca: trilha = Jogar, ipê = Recorde, toca = Créditos). Falta a tela de final com tempo e sementes, que grava o recorde, e a pausa em madeira. Seguir o [guia visual](docs/guia-visual.md) e o [guia de movimento](docs/guia-movimento.md) ([sessão](docs/sessoes/2026-10-28-lobby-visual-e-movimento.md)).
 - [ ] **5. Som** — efeitos e trilha com chamber rack flute.
 - [ ] **6. Deploy** — GitHub Pages ou Vercel.
 
@@ -16,3 +16,4 @@ Escopo completo em [docs/escopo-mvp.md](docs/escopo-mvp.md). Sessões em [docs/s
 
 - Trilha sonora com chamber rack flute: falta definir como a trilha vai ser produzida e entregue.
 - Armadilha não rearma no respawn.
+- Opção de movimento reduzido (o jogo ainda não tem; o guia de movimento já define a versão reduzida de cada animação).

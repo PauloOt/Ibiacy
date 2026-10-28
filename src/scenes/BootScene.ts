@@ -8,7 +8,8 @@ export class BootScene extends Phaser.Scene {
 
   create(): void {
     bakeAll(this);
-    const gallery = new URLSearchParams(location.search).has('galeria');
-    this.scene.start(gallery ? 'Gallery' : 'Game');
+    // ?galeria mostra as animações; ?fase pula o lobby e cai direto na fase
+    const q = new URLSearchParams(location.search);
+    this.scene.start(q.has('galeria') ? 'Gallery' : q.has('fase') ? 'Game' : 'Lobby');
   }
 }
