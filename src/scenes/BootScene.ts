@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { makePlaceholderTextures } from '../art/placeholders';
+import { bakeAll } from '../art';
 
 export class BootScene extends Phaser.Scene {
   constructor() {
@@ -7,7 +7,8 @@ export class BootScene extends Phaser.Scene {
   }
 
   create(): void {
-    makePlaceholderTextures(this);
-    this.scene.start('Game');
+    bakeAll(this);
+    const gallery = new URLSearchParams(location.search).has('galeria');
+    this.scene.start(gallery ? 'Gallery' : 'Game');
   }
 }

@@ -22,7 +22,7 @@ export class Onca extends Hero {
       airAccel: 1200,
       jumpVelocity: 420,
       width: 38,
-      height: 26,
+      height: 24,
     });
   }
 
@@ -53,6 +53,10 @@ export class Onca extends Hero {
       this.setVelocityX(this.dashDir * this.stats.runSpeed);
     }
     return false;
+  }
+
+  protected animKey(ctx: HeroContext): string {
+    return this.dashing ? 'dash' : super.animKey(ctx);
   }
 
   protected onSleep(): void {

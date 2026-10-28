@@ -52,12 +52,16 @@ export abstract class Hero extends Phaser.Physics.Arcade.Sprite {
   facing: 1 | -1 = 1;
   protected inWater = false;
   private submergedMs = 0;
+  private wasGrounded = false;
+  private lastVy = 0;
 
   constructor(scene: Phaser.Scene, texture: string, readonly stats: HeroStats) {
-    super(scene, 0, 0, texture);
+    super(scene, 0, 0, texture, 0);
     scene.add.existing(this);
     scene.physics.add.existing(this);
-    this.body.setSize(stats.width, stats.height);
+    // O desenho é maior que a caixa de colisão (cauda, cabeça): a caixa fica centrada e com o pé no chão do frame
+    this.body.setSize(stats.width, stats.height, false);
+    this.body.setOffset((this.width - stats.width) / 2, this.height - stats.height);
     this.body.setMaxVelocity(2000, MAX_FALL_SPEED);
     this.setDepth(3);
     this.sleep();
@@ -81,12 +85,48 @@ export abstract class Hero extends Phaser.Physics.Arcade.Sprite {
   wake(x: number, bottom: number, vx: number, vy: number, facing: 1 | -1): void {
     this.setActive(true).setVisible(true).setAlpha(1);
     this.body.enable = true;
-    this.body.reset(x, bottom - this.stats.height / 2);
+    this.body.reset(x, bottom - this.height / 2);
+    this.wasGrounded = false;
+    this.lastVy = vy;
     this.setVelocity(vx, vy);
     this.face(facing);
   }
 
   tick(ctx: HeroContext): void {
+    this.step(ctx);
+
+    const grounded = this.grounded;
+    if (grounded && !this.wasGrounded && this.lastVy > 260) this.dust(Math.min(1, this.lastVy / 700));
+    this.wasGrounded = grounded;
+    this.lastVy = this.body.velocity.y;
+
+    const key = this.animKey(ctx);
+    this.play(`${this.id}-${key}`, true);
+    // Corrida mais devagar quando o bicho está acelerando ou freando
+    this.anims.timeScale = key === 'run' ? Phaser.Math.Clamp(Math.abs(this.body.velocity.x) / this.stats.runSpeed, 0.5, 1.2) : 1;
+  }
+
+  /** Centro da caixa de colisão (o sprite tem a cauda pra fora, então não é o x/y dele). */
+  get centerX(): number {
+    return this.body.center.x;
+  }
+
+  get centerY(): number {
+    return this.body.center.y;
+  }
+
+  /** Qual animação tocar neste frame: idle, run, jump, fall ou uma própria do bicho. */
+  protected animKey(ctx: HeroContext): string {
+    if (ctx.rooted) return 'idle';
+    if (!this.grounded) return this.body.velocity.y < 0 ? 'jump' : 'fall';
+    return Math.abs(this.body.velocity.x) > 25 ? 'run' : 'idle';
+  }
+
+  protected dust(strength: number): void {
+    this.scene.events.emit('hero:dust', this.body.center.x, this.body.bottom, strength);
+  }
+
+  private step(ctx: HeroContext): void {
     const { now, input, air } = ctx;
     const grounded = this.grounded;
     if (grounded) {
@@ -96,7 +136,7 @@ export abstract class Hero extends Phaser.Physics.Arcade.Sprite {
     if (input.jumpPressed) ctx.jump.press(now);
 
     const wasInWater = this.inWater;
-    this.inWater = ctx.level.isWater(this.x, this.y);
+    this.inWater = ctx.level.isWater(this.centerX, this.centerY);
     if (wasInWater && !this.inWater) {
       this.body.setAllowGravity(true);
       this.submergedMs = 0;
@@ -115,7 +155,10 @@ export abstract class Hero extends Phaser.Physics.Arcade.Sprite {
     if (this.special(ctx)) return;
 
     this.run(ctx);
-    if (ctx.jump.tryGroundJump(now)) this.jump(ctx, this.stats.jumpVelocity);
+    if (ctx.jump.tryGroundJump(now)) {
+      this.jump(ctx, this.stats.jumpVelocity);
+      this.dust(0.5);
+    }
     else if (input.jumpPressed) this.onAirJumpPress(ctx);
 
     // Pulo variável: soltou subindo, corta uma vez

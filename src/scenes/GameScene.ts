@@ -1,5 +1,7 @@
 import Phaser from 'phaser';
-import { TILE } from '../config';
+import { GAME_HEIGHT, GAME_WIDTH, TILE } from '../config';
+import { groundFrame } from '../art/world';
+import { hash2 } from '../art/rng';
 import { cellAt, connectedBreakables, parseLevel, type ParsedLevel, type TilePos } from '../core/levelParser';
 import type { Hero, LevelQuery } from '../heroes/Hero';
 import { Lontra } from '../heroes/Lontra';
@@ -9,18 +11,26 @@ import { Controls } from '../input/Controls';
 import { salaDeTeste } from '../levels/salaDeTeste';
 import { TeamManager } from '../team/TeamManager';
 
-type Img = Phaser.Physics.Arcade.Image;
+type Spr = Phaser.Physics.Arcade.Sprite;
+type Emitter = Phaser.GameObjects.Particles.ParticleEmitter;
 
 const tileCenter = (p: TilePos) => ({ x: p.tx * TILE + TILE / 2, y: p.ty * TILE + TILE / 2 });
+
+// Camadas de desenho, de trás pra frente
+const DEPTH = { bg: -10, deco: 1, object: 2, hero: 3, water: 5, fx: 6, light: 7 } as const;
 
 export class GameScene extends Phaser.Scene implements LevelQuery {
   private level!: ParsedLevel;
   private team!: TeamManager;
   private controls!: Controls;
-  private leaves!: Phaser.GameObjects.Particles.ParticleEmitter;
-  private breakables = new Map<string, Img>();
+  private parallax: { layer: Phaser.GameObjects.TileSprite; factor: number }[] = [];
+  private fx!: Record<'leaves' | 'dust' | 'embers' | 'petals' | 'sparkle' | 'splash', Emitter>;
+  private breakables = new Map<string, Spr>();
   /** Sementes pegas desde o último checkpoint: voltam pro mapa se o time morrer */
-  private seedsSinceCheckpoint: Img[] = [];
+  private seedsSinceCheckpoint: Spr[] = [];
+  private wasInWater = false;
+  /** Fogos que a lontra apagou (param de soltar brasa) */
+  private extinguished = new Set<string>();
 
   constructor() {
     super('Game');
@@ -30,53 +40,75 @@ export class GameScene extends Phaser.Scene implements LevelQuery {
     this.level = parseLevel(salaDeTeste);
     const worldW = this.level.width * TILE;
     const worldH = this.level.height * TILE;
-    this.cameras.main.setBackgroundColor('#bfe3c4').setBounds(0, 0, worldW, worldH);
+    this.cameras.main.setBounds(0, 0, worldW, worldH);
     this.physics.world.setBounds(0, 0, worldW, worldH + TILE * 4);
 
+    this.buildBackground();
     const solids = this.buildTerrain();
+    this.createEffects();
+
     const breakables = this.physics.add.staticGroup();
     for (const p of this.level.breakables) {
       const c = tileCenter(p);
-      const log = breakables.create(c.x, c.y, 'log') as Img;
+      const top = cellAt(this.level, p.tx, p.ty - 1) !== 'L';
+      const log = (breakables.create(c.x, c.y, 'log', top ? 0 : 1) as Spr).setDepth(DEPTH.object);
       this.breakables.set(`${p.tx},${p.ty}`, log);
     }
-    const fires = this.staticGroupOf(this.level.fires, 'fire');
-    const traps = this.staticGroupOf(this.level.traps, 'trap');
-    const seeds = this.staticGroupOf(this.level.seeds, 'seed');
+
+    const fires = this.physics.add.staticGroup();
+    for (const p of this.level.fires) {
+      const c = tileCenter(p);
+      const fire = (fires.create(c.x, c.y, 'fire') as Spr).setDepth(DEPTH.object).play({ key: 'fire-burn', startFrame: hash2(p.tx, p.ty) % 6 });
+      // Corpo menor que o tile: encostar na beirada da chama não queima
+      fire.body!.setSize(20, 22).setOffset(6, 10);
+      const glow = this.addGlow(c.x, c.y + 4, 0xff8a2a, 1.6, 0.55);
+      fire.setData('glow', glow);
+    }
+
+    const traps = this.physics.add.staticGroup();
+    for (const p of this.level.traps) {
+      const c = tileCenter(p);
+      const trap = (traps.create(c.x, c.y, 'trap', 0) as Spr).setDepth(DEPTH.object);
+      trap.body!.setSize(24, 8).setOffset(4, 24);
+    }
+
+    const seeds = this.physics.add.staticGroup();
+    for (const p of this.level.seeds) {
+      const c = tileCenter(p);
+      const seed = (seeds.create(c.x, c.y, 'seed') as Spr).setDepth(DEPTH.object).play({ key: 'seed-shine', startFrame: hash2(p.tx, p.ty) % 8 });
+      seed.setData('glow', this.addGlow(c.x, c.y, 0xffe08a, 0.45, 0.45));
+      this.tweens.add({ targets: seed, y: c.y - 3, duration: 900, yoyo: true, repeat: -1, ease: 'Sine.InOut', delay: hash2(p.ty, p.tx) % 900 });
+    }
+
     const checkpoints = this.physics.add.staticGroup();
     for (const p of this.level.checkpoints) {
-      const c = tileCenter(p);
-      (checkpoints.create(c.x, c.y, 'sprout') as Img).setData('reached', false);
+      const bottom = (p.ty + 1) * TILE;
+      const cp = (checkpoints.create(p.tx * TILE + TILE / 2, bottom - TILE, 'sapling', 0) as Spr).setDepth(DEPTH.object);
+      cp.play('sapling-idle').setData('reached', false);
+      // O frame tem 2 tiles de altura; o gatilho é só o tile de baixo
+      cp.body!.setSize(TILE, TILE).setOffset(0, TILE);
     }
 
     const heroes: Hero[] = [new Mico(this), new Onca(this), new Lontra(this)];
+    heroes.forEach((h) => h.setDepth(DEPTH.hero));
     const start = tileCenter(this.level.start);
     this.team = new TeamManager(heroes, { x: start.x, bottom: (this.level.start.ty + 1) * TILE });
 
     this.physics.add.collider(heroes, solids);
-    this.physics.add.collider(heroes, breakables, undefined, (h, log) => this.onLogContact(h as Hero, log as Img));
-    this.physics.add.overlap(heroes, fires, (h, f) => this.onFire(h as Hero, f as Img));
-    this.physics.add.overlap(heroes, traps, (h, t) => this.onTrap(h as Hero, t as Img));
-    this.physics.add.overlap(heroes, seeds, (_h, s) => this.onSeed(s as Img));
-    this.physics.add.overlap(heroes, checkpoints, (_h, c) => this.onCheckpoint(c as Img));
-
-    this.leaves = this.add.particles(0, 0, 'leaf', {
-      speed: { min: 60, max: 180 },
-      angle: { min: 0, max: 360 },
-      rotate: { min: 0, max: 360 },
-      lifespan: 450,
-      gravityY: 300,
-      scale: { start: 1.4, end: 0 },
-      emitting: false,
-    }).setDepth(4);
+    this.physics.add.collider(heroes, breakables, undefined, (h, log) => this.onLogContact(h as Hero, log as Spr));
+    this.physics.add.overlap(heroes, fires, (h, f) => this.onFire(h as Hero, f as Spr));
+    this.physics.add.overlap(heroes, traps, (h, t) => this.onTrap(h as Hero, t as Spr));
+    this.physics.add.overlap(heroes, seeds, (_h, s) => this.onSeed(s as Spr));
+    this.physics.add.overlap(heroes, checkpoints, (_h, c) => this.onCheckpoint(c as Spr));
 
     this.team.on('swapped', (x: number, y: number) => {
-      this.leaves.explode(12, x, y);
+      this.fx.leaves.explode(14, x, y);
       this.follow();
     });
     this.team.on('respawned', () => this.restoreSeeds());
     this.team.on('changed', () => this.registry.set('hud', this.team.snapshot()));
     this.registry.set('hud', this.team.snapshot());
+    this.events.on('hero:dust', (x: number, y: number, strength: number) => this.fx.dust.explode(Math.round(3 + strength * 6), x, y - 2));
     this.follow();
 
     this.controls = new Controls(this);
@@ -96,7 +128,16 @@ export class GameScene extends Phaser.Scene implements LevelQuery {
     }
     // Delta limitado: aba voltando do segundo plano não teleporta o herói
     this.team.update(input, time, Math.min(delta, 50), this);
-    if (this.team.active.body.top > this.level.height * TILE) this.team.respawn();
+    const hero = this.team.active;
+    if (hero.body.top > this.level.height * TILE) this.team.respawn();
+
+    // Respingo ao entrar ou sair da água
+    const inWater = this.isWater(hero.centerX, hero.centerY);
+    if (inWater !== this.wasInWater) this.fx.splash.explode(10, hero.centerX, Math.floor(hero.centerY / TILE) * TILE + (inWater ? 0 : TILE));
+    this.wasInWater = inWater;
+
+    const cam = this.cameras.main;
+    for (const { layer, factor } of this.parallax) layer.tilePositionX = cam.scrollX * factor;
   }
 
   isWater(x: number, y: number): boolean {
@@ -107,98 +148,185 @@ export class GameScene extends Phaser.Scene implements LevelQuery {
     return cellAt(this.level, Math.floor(x / TILE), Math.floor(y / TILE)) === 'V';
   }
 
+  // ---------- montagem ----------
+
+  private buildBackground(): void {
+    const layers: [string, number][] = [['bg-sky', 0.02], ['bg-mountain', 0.08], ['bg-canopy', 0.2], ['bg-bush', 0.4]];
+    layers.forEach(([key, factor], i) => {
+      const layer = this.add.tileSprite(0, 0, GAME_WIDTH, GAME_HEIGHT, key).setOrigin(0).setScrollFactor(0).setDepth(DEPTH.bg + i);
+      this.parallax.push({ layer, factor });
+    });
+    // Raios de sol entre as copas, respirando devagar
+    const rays = this.add.image(0, 0, 'rays').setOrigin(0).setScrollFactor(0).setDepth(DEPTH.bg + 5).setBlendMode(Phaser.BlendModes.ADD).setAlpha(0.22);
+    this.tweens.add({ targets: rays, alpha: 0.1, duration: 4000, yoyo: true, repeat: -1, ease: 'Sine.InOut' });
+    // Poeirinha de luz flutuando
+    this.add.particles(0, 0, 'p-mote', {
+      x: { min: 0, max: GAME_WIDTH },
+      y: { min: 0, max: GAME_HEIGHT },
+      lifespan: 6000,
+      speedX: { min: -8, max: 8 },
+      speedY: { min: -12, max: -3 },
+      alpha: { start: 0.9, end: 0, ease: 'Sine.In' },
+      quantity: 1,
+      frequency: 220,
+      blendMode: Phaser.BlendModes.ADD,
+    }).setScrollFactor(0).setDepth(DEPTH.bg + 6);
+  }
+
   private buildTerrain(): Phaser.Physics.Arcade.StaticGroup {
-    const { grid } = this.level;
-    grid.forEach((row, ty) => {
+    const lvl = this.level;
+    const solid = (tx: number, ty: number) => cellAt(lvl, tx, ty) === '#';
+    lvl.grid.forEach((row, ty) => {
       [...row].forEach((ch, tx) => {
         const { x, y } = tileCenter({ tx, ty });
-        if (ch === '#') this.add.image(x, y, cellAt(this.level, tx, ty - 1) === '#' ? 'dirt' : 'grass');
-        else if (ch === 'V') this.add.image(x, y, 'vine').setDepth(1);
-        else if (ch === '~') {
-          // Linha de superfície só onde tem ar em cima (embaixo da pedra não tem)
-          const above = cellAt(this.level, tx, ty - 1);
-          this.add.image(x, y, above === '~' || above === '#' ? 'water' : 'water-top').setDepth(5);
+        if (ch === '#') {
+          const sides = { top: !solid(tx, ty - 1), bottom: !solid(tx, ty + 1) && ty + 1 < lvl.height, left: !solid(tx - 1, ty), right: !solid(tx + 1, ty) };
+          // Quanto mais fundo na terra, mais escuro: dá profundidade sem desenhar tile novo
+          let depth = 0;
+          while (depth < 5 && solid(tx, ty - depth - 1)) depth++;
+          const shade = Phaser.Display.Color.Interpolate.ColorWithColor(
+            Phaser.Display.Color.ValueToColor(0xffffff), Phaser.Display.Color.ValueToColor(0x5a4a66), 6, depth);
+          this.add.image(x, y, 'ground', groundFrame(sides, hash2(tx, ty)))
+            .setTint(Phaser.Display.Color.GetColor(shade.r, shade.g, shade.b));
+          // Tufo de grama, flor ou samambaia em cima de parte do chão
+          const h = hash2(tx * 3, ty * 5);
+          if (sides.top && h % 5 < 2 && cellAt(lvl, tx, ty - 1) === '.') {
+            this.add.sprite(x + ((h >>> 4) % 9) - 4, y - TILE / 2 + 1, 'tuft').setOrigin(0.5, 1).setDepth(DEPTH.deco)
+              .play({ key: `tuft-${(h >>> 8) % 4}`, startFrame: (h >>> 12) % 4 });
+          }
+        } else if (ch === 'V') {
+          this.add.sprite(x, y, 'vine').setDepth(DEPTH.deco).play('vine-sway');
+        } else if (ch === '~') {
+          // Superfície só onde tem ar em cima (embaixo da pedra não tem)
+          const above = cellAt(lvl, tx, ty - 1);
+          const surface = above !== '~' && above !== '#';
+          let depth = 0;
+          // Embaixo da pedra também conta como fundo (fica escuro)
+          while (depth < 6 && '~#'.includes(cellAt(lvl, tx, ty - depth - 1))) depth++;
+          const deep = Phaser.Display.Color.Interpolate.ColorWithColor(
+            Phaser.Display.Color.ValueToColor(0xffffff), Phaser.Display.Color.ValueToColor(0x5a7aa8), 7, depth);
+          this.add.sprite(x, y, 'water').setDepth(DEPTH.water).setAlpha(0.72)
+            .setTint(Phaser.Display.Color.GetColor(deep.r, deep.g, deep.b))
+            .play({ key: surface ? 'water-top' : 'water-deep', startFrame: tx % 4 });
         }
       });
     });
 
     // Corpo de colisão por faixa contínua de chão (invisível; o desenho é por tile)
     const solids = this.physics.add.staticGroup();
-    for (const r of this.level.solids) {
-      const zone = this.add.zone((r.tx + r.w / 2) * TILE, (r.ty + r.h / 2) * TILE, r.w * TILE, r.h * TILE);
-      solids.add(zone);
+    for (const r of lvl.solids) {
+      solids.add(this.add.zone((r.tx + r.w / 2) * TILE, (r.ty + r.h / 2) * TILE, r.w * TILE, r.h * TILE));
     }
     return solids;
   }
 
-  private staticGroupOf(positions: TilePos[], texture: string): Phaser.Physics.Arcade.StaticGroup {
-    const group = this.physics.add.staticGroup();
-    for (const p of positions) {
-      const c = tileCenter(p);
-      group.create(c.x, c.y, texture).setDepth(2);
-    }
-    return group;
+  private createEffects(): void {
+    const burst = (texture: string, cfg: Phaser.Types.GameObjects.Particles.ParticleEmitterConfig) =>
+      this.add.particles(0, 0, texture, { emitting: false, ...cfg }).setDepth(DEPTH.fx);
+    this.fx = {
+      leaves: burst('p-leaf', { speed: { min: 60, max: 180 }, angle: { min: 0, max: 360 }, rotate: { min: 0, max: 360 }, lifespan: 600, gravityY: 260, scale: { start: 1, end: 0.4 } }),
+      dust: burst('p-dust', { speed: { min: 20, max: 70 }, angle: { min: 190, max: 350 }, lifespan: 380, gravityY: -40, alpha: { start: 0.8, end: 0 }, scale: { start: 1, end: 0.3 } }),
+      embers: burst('p-ember', { speed: { min: 10, max: 30 }, angle: { min: 250, max: 290 }, lifespan: 900, alpha: { start: 1, end: 0 } }),
+      petals: burst('p-petal', { speed: { min: 40, max: 140 }, angle: { min: 200, max: 340 }, rotate: { min: 0, max: 360 }, lifespan: 1400, gravityY: 90 }),
+      sparkle: burst('p-sparkle', { speed: { min: 30, max: 90 }, angle: { min: 0, max: 360 }, lifespan: 450, scale: { start: 1, end: 0 }, blendMode: Phaser.BlendModes.ADD }),
+      splash: burst('p-splash', { speed: { min: 60, max: 160 }, angle: { min: 230, max: 310 }, lifespan: 500, gravityY: 600, alpha: { start: 1, end: 0.2 } }),
+    };
+    // Brasas subindo de todos os fogos
+    this.time.addEvent({
+      delay: 180,
+      loop: true,
+      callback: () => {
+        for (const p of this.level.fires) {
+          const key = `${p.tx},${p.ty}`;
+          if (this.extinguished.has(key)) continue;
+          const c = tileCenter(p);
+          this.fx.embers.explode(1, c.x + Phaser.Math.Between(-8, 8), c.y - 6);
+        }
+      },
+    });
+  }
+
+  /** Luz suave somada por cima (fogo, semente), pulsando. */
+  private addGlow(x: number, y: number, color: number, scale: number, alpha: number): Phaser.GameObjects.Image {
+    const glow = this.add.image(x, y, 'glow').setTint(color).setScale(scale).setAlpha(alpha).setBlendMode(Phaser.BlendModes.ADD).setDepth(DEPTH.light);
+    this.tweens.add({ targets: glow, alpha: alpha * 0.6, scale: scale * 0.9, duration: 500 + (hash2(x, y) % 400), yoyo: true, repeat: -1, ease: 'Sine.InOut' });
+    return glow;
   }
 
   private follow(): void {
     this.cameras.main.startFollow(this.team.active, true, 0.15, 0.15);
   }
 
+  // ---------- contatos ----------
+
   /** Onça em investida atravessa e quebra o tronco inteiro; pros outros é parede. */
-  private onLogContact(hero: Hero, log: Img): boolean {
+  private onLogContact(hero: Hero, log: Spr): boolean {
     if (!(hero instanceof Onca) || !hero.isDashing) return true;
     const p = { tx: Math.floor(log.x / TILE), ty: Math.floor(log.y / TILE) };
     for (const piece of connectedBreakables(this.level, p)) {
       const key = `${piece.tx},${piece.ty}`;
-      this.breakables.get(key)?.destroy();
+      const spr = this.breakables.get(key);
+      if (spr) {
+        this.fx.leaves.explode(6, spr.x, spr.y);
+        this.fx.dust.explode(8, spr.x, spr.y);
+        spr.destroy();
+      }
       this.breakables.delete(key);
       // Tira do grid pra não quebrar de novo
       const row = this.level.grid[piece.ty];
       this.level.grid[piece.ty] = row.slice(0, piece.tx) + '.' + row.slice(piece.tx + 1);
     }
-    this.cameras.main.shake(120, 0.006);
+    this.cameras.main.shake(140, 0.007);
     return false;
   }
 
-  private onFire(hero: Hero, fire: Img): void {
+  private onFire(hero: Hero, fire: Spr): void {
     if (hero instanceof Lontra && hero.isWet(this.time.now)) {
-      this.leaves.explode(6, fire.x, fire.y);
+      this.fx.splash.explode(12, fire.x, fire.y);
+      this.fx.dust.explode(10, fire.x, fire.y);
+      this.extinguished.add(`${Math.floor(fire.x / TILE)},${Math.floor(fire.y / TILE)}`);
+      (fire.getData('glow') as Phaser.GameObjects.Image).destroy();
       fire.destroy();
       return;
     }
     this.team.hurt(this.time.now, fire.x);
   }
 
-  private onTrap(hero: Hero, trap: Img): void {
+  private onTrap(hero: Hero, trap: Spr): void {
     if (trap.getData('sprung')) return;
     if (hero instanceof Onca && hero.isDashing) {
+      this.fx.dust.explode(6, trap.x, trap.y + 10);
       trap.destroy();
       return;
     }
     if (this.team.trap(this.time.now, trap.x)) {
-      trap.setData('sprung', true).setTexture('trap-sprung');
+      trap.setData('sprung', true).setFrame(1);
     }
   }
 
-  private onSeed(seed: Img): void {
+  private onSeed(seed: Spr): void {
     seed.disableBody(true, true);
+    (seed.getData('glow') as Phaser.GameObjects.Image).setVisible(false);
+    this.fx.sparkle.explode(8, seed.x, seed.y);
     this.seedsSinceCheckpoint.push(seed);
     this.team.collectSeed();
   }
 
-  private onCheckpoint(sprout: Img): void {
-    if (sprout.getData('reached')) return;
-    sprout.setData('reached', true).setTexture('tree');
-    // A árvore tem 2 tiles de altura: sobe meio tile pra continuar com o pé no chão
-    sprout.y -= TILE / 2;
-    const bottom = sprout.y + TILE;
-    this.leaves.explode(16, sprout.x, sprout.y);
+  private onCheckpoint(cp: Spr): void {
+    if (cp.getData('reached')) return;
+    cp.setData('reached', true);
+    cp.play('sapling-grow').once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => cp.play('tree-idle'));
+    this.fx.leaves.explode(10, cp.x, cp.y + TILE / 2);
+    this.time.delayedCall(450, () => this.fx.petals.explode(18, cp.x, cp.y - 8));
     this.seedsSinceCheckpoint = [];
-    this.team.setCheckpoint({ x: sprout.x, bottom });
+    this.team.setCheckpoint({ x: cp.x, bottom: cp.y + TILE });
   }
 
   private restoreSeeds(): void {
-    for (const seed of this.seedsSinceCheckpoint) seed.enableBody(false, 0, 0, true, true);
+    for (const seed of this.seedsSinceCheckpoint) {
+      seed.enableBody(false, 0, 0, true, true);
+      (seed.getData('glow') as Phaser.GameObjects.Image).setVisible(true);
+    }
     this.seedsSinceCheckpoint = [];
   }
 }

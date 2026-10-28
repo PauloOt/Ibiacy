@@ -1,6 +1,9 @@
 // Números de jogo num lugar só, pra afinar o "feel" sem caçar constante pelo código.
 
 export const TILE = 32;
+// Cada pixel da arte vira 2×2 no mundo (tile de 16 px de arte = 32 de mundo)
+export const ART_SCALE = 2;
+export const PIXEL_FONT = '"Pixelify Sans", monospace';
 export const GAME_WIDTH = 960;
 export const GAME_HEIGHT = 540;
 

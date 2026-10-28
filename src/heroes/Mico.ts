@@ -18,7 +18,7 @@ export class Mico extends Hero {
       airAccel: 1600,
       jumpVelocity: 520,
       width: 20,
-      height: 26,
+      height: 24,
     });
   }
 
@@ -31,7 +31,7 @@ export class Mico extends Hero {
 
   protected special(ctx: HeroContext): boolean {
     const { input } = ctx;
-    const onVine = ctx.level.isVine(this.x, this.y);
+    const onVine = ctx.level.isVine(this.centerX, this.centerY);
 
     // Agarra com ↑ ou com a habilidade; agarrar devolve o pulo duplo
     if (!this.climbing && onVine && (input.up || input.abilityPressed)) {
@@ -57,6 +57,11 @@ export class Mico extends Hero {
     this.body.setAllowGravity(false);
     this.setVelocity(0, input.up ? -CLIMB_SPEED : input.down ? CLIMB_SPEED : 0);
     return true;
+  }
+
+  protected animKey(ctx: HeroContext): string {
+    if (this.climbing) return this.body.velocity.y !== 0 ? 'climb' : 'cling';
+    return super.animKey(ctx);
   }
 
   useAbility(): void {

@@ -15,7 +15,7 @@ npm test           # testes da lógica (Vitest)
 npm run build      # checa tipos e gera dist/
 ```
 
-`http://localhost:5180/?debug` mostra as caixas de colisão.
+`http://localhost:5180/?debug` mostra as caixas de colisão e `?galeria` mostra todas as animações dos heróis.
 
 ## Controles
 
@@ -41,6 +41,10 @@ npm run build      # checa tipos e gera dist/
 
 Phaser 3 (Arcade Physics) + TypeScript + Vite. Mapas no Tiled a partir da etapa 2; por enquanto a sala de teste é um mapa em texto (`src/levels/salaDeTeste.ts`).
 
+## Arte
+
+Pixel art desenhada em código, com o [Arperium](https://arperium.app/) como referência de estilo: volume com luz quente em cima e sombra fria embaixo, contorno escuro, grão de textura, brilhos e partículas. Nada de imagem pronta: `src/art/` monta cada bicho com formas sombreadas, e cada frame de animação sai de uma pose (fase da passada, balanço da cauda, respiração). O Boot gera as texturas uma vez ao abrir o jogo. Fonte: Pixelify Sans (Google Fonts).
+
 ## Estrutura
 
 ```
@@ -50,6 +54,6 @@ src/
   heroes/            Hero (base) + Mico, Onca, Lontra
   team/TeamManager   os 3 heróis, vida compartilhada e a troca
   scenes/            Boot, Game, Hud, Pause
-  art/placeholders   arte provisória desenhada em código
+  art/               pixel art em código: raster com sombreado, heróis por pose, tiles, fundo
   levels/            mapas
 ```

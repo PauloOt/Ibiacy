@@ -43,7 +43,7 @@ export class Lontra extends Hero {
     this.setVelocityY(approach(this.body.velocity.y, targetY, step));
 
     // Cabeça fora d'água: dá pra pular pra margem
-    const headOut = !ctx.level.isWater(this.x, this.body.top + 2);
+    const headOut = !ctx.level.isWater(this.centerX, this.body.top + 2);
     if (headOut && ctx.jump.hasBufferedPress(ctx.now)) {
       ctx.jump.consumePress();
       this.body.setAllowGravity(true);
@@ -51,6 +51,10 @@ export class Lontra extends Hero {
     }
 
     if (input.abilityPressed) this.setVelocityY(DIVE_SPEED);
+  }
+
+  protected animKey(ctx: HeroContext): string {
+    return this.inWater ? 'swim' : super.animKey(ctx);
   }
 
   protected onLeaveWater(ctx: HeroContext): void {
