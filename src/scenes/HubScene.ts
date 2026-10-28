@@ -2,8 +2,8 @@ import Phaser from 'phaser';
 import { GAME_HEIGHT, GAME_WIDTH } from '../config';
 import type { HeroId } from '../core/TeamState';
 import { FLOOR_E, HUB_FUNGI, KNOT } from '../art/hub';
-import { CREDITOS, FALAS, HABILIDADES, LOJA, MISSOES, NOMES, type Missao } from '../hub/data';
-import { ATTRS, carregar, comprar, distribuir, ganharXp, novoJogo, salvar, xpParaProximo, type Save } from '../hub/save';
+import { CREDITOS, ESTILOS, FALAS, HABILIDADES, LOJA, MISSOES, NOMES, type Missao } from '../hub/data';
+import { ATTRS, ATTRS_INICIAIS, carregar, comprar, distribuir, ganharXp, novoJogo, salvar, xpParaProximo, type Save } from '../hub/save';
 import { drawBar, drawBark, drawButton } from '../ui/bark';
 import { LeafCurtain } from '../ui/LeafCurtain';
 import { css, D, D_CAMERA, FONT_HUB, FONT_TEXT, OCO, reducedMotion } from '../ui/tokens';
@@ -12,7 +12,7 @@ import { css, D, D_CAMERA, FONT_HUB, FONT_TEXT, OCO, reducedMotion } from '../ui
 // Guias: docs/guia-visual.md (o oco aceso pelos fungos) e docs/guia-movimento.md (fora da ação
 // mexem a câmera e os moradores; a interface só aparece).
 
-type Estado = 'menu' | 'creditos' | 'entrando' | 'livre' | 'conversa' | 'missoes' | 'loja' | 'ficha' | 'saindo';
+type Estado = 'menu' | 'escolha' | 'creditos' | 'entrando' | 'livre' | 'conversa' | 'missoes' | 'loja' | 'ficha' | 'saindo';
 
 export interface HubData {
   /** Voltou de uma missão completa */
@@ -22,7 +22,9 @@ export interface HubData {
 /** Tudo em pixels do mundo (o fundo é a arte × 2). */
 const S = 2;
 const FLOOR = { cx: FLOOR_E.cx * S, cy: FLOOR_E.cy * S, rx: FLOOR_E.rx * S - 24, ry: FLOOR_E.ry * S - 18 };
-const HOME: Record<HeroId, [number, number]> = { onca: [480, 860], mico: [300, 652], lontra: [520, 604] };
+/** Onde o bicho aparece no salão. */
+const HOME: [number, number] = [480, 860];
+const HEROIS: readonly HeroId[] = ['mico', 'onca', 'lontra'];
 const SPEED: Record<HeroId, number> = { onca: 170, mico: 160, lontra: 110 };
 const SPOTS = {
   ubiraca: { x: 720, y: 740, r: 90, tag: [720, 590] as const, label: 'Falar com Ubiraçá' },
@@ -42,8 +44,9 @@ export class HubScene extends Phaser.Scene {
   private estado: Estado = 'menu';
   private worldL!: Phaser.GameObjects.Layer;
   private uiL!: Phaser.GameObjects.Layer;
-  private herois!: Record<HeroId, Phaser.GameObjects.Sprite>;
-  private ativo: HeroId = 'onca';
+  /** O bicho escolhido no Novo jogo (um só) */
+  private player: Phaser.GameObjects.Sprite | null = null;
+  private escolha: { root: Phaser.GameObjects.Container; sel: number } | null = null;
   private jabuti!: Phaser.GameObjects.Sprite;
   private tags = new Map<SpotId, { root: Phaser.GameObjects.Container; g: Phaser.GameObjects.Graphics; w: number; near: boolean }>();
   private near: SpotId | null = null;
@@ -72,6 +75,8 @@ export class HubScene extends Phaser.Scene {
     this.tags.clear();
     this.glows = [];
     this.save = carregar();
+    this.player = null;
+    this.escolha = null;
 
     this.worldL = this.add.layer().setDepth(0);
     this.uiL = this.add.layer().setDepth(50);
@@ -89,7 +94,7 @@ export class HubScene extends Phaser.Scene {
     this.bars = [0, 1].map((i) => this.ui(this.add.rectangle(0, i ? GAME_HEIGHT : 0, GAME_WIDTH, BAR_H, 0x000000).setOrigin(0, i ? 1 : 0).setScale(1, 0)));
     this.fade = this.ui(this.add.rectangle(0, 0, GAME_WIDTH, GAME_HEIGHT, 0x000000, 1).setOrigin(0).setAlpha(0));
 
-    this.keys = this.input.keyboard!.addKeys('W,A,S,D,UP,DOWN,LEFT,RIGHT,E,ENTER,SPACE,ESC,C,ONE,TWO,THREE') as Record<string, Phaser.Input.Keyboard.Key>;
+    this.keys = this.input.keyboard!.addKeys('W,A,S,D,UP,DOWN,LEFT,RIGHT,E,ENTER,SPACE,ESC,C') as Record<string, Phaser.Input.Keyboard.Key>;
 
     if (data.resultado && this.save) {
       // Voltou da missão: direto pro salão, com a cortina abrindo e a recompensa
@@ -102,7 +107,7 @@ export class HubScene extends Phaser.Scene {
     (window as unknown as { __ibiacy?: unknown }).__ibiacy = { scene: this };
   }
 
-  update(time: number, delta: number): void {
+  update(_time: number, delta: number): void {
     const k = this.keys;
     const just = Phaser.Input.Keyboard.JustDown;
     const act = just(k.E) || just(k.ENTER) || just(k.SPACE);
@@ -119,14 +124,16 @@ export class HubScene extends Phaser.Scene {
         if (up || down) this.moveMenu(up ? -1 : 1);
         if (act) this.chooseMenu();
         break;
+      case 'escolha':
+        if (left || right) this.moveHeroSelect(left ? -1 : 1);
+        if (act) this.chooseHero();
+        else if (esc) this.closeHeroSelect();
+        break;
       case 'creditos':
         if (act || esc) this.closePanel(() => this.openMenu());
         break;
       case 'livre':
         this.walk(delta);
-        if (just(k.ONE)) this.swap('mico');
-        if (just(k.TWO)) this.swap('onca');
-        if (just(k.THREE)) this.swap('lontra');
         if (act && this.near === 'ubiraca') this.talk();
         else if (act && this.near === 'loja') this.openShop();
         else if (just(k.C)) this.openSheet();
@@ -154,7 +161,6 @@ export class HubScene extends Phaser.Scene {
       default:
         break;
     }
-    this.idleOthers(time);
   }
 
   // ---------- montagem ----------
@@ -177,12 +183,14 @@ export class HubScene extends Phaser.Scene {
     this.jabuti = this.world(this.add.sprite(724, 694, 'jabuti', 0).setOrigin(0.5, 1).setDepth(709));
     this.world(this.add.image(430, 616, 'hub-bica').setOrigin(0.5, 1).setDepth(616));
 
-    const make = (id: HeroId) => this.world(this.add.sprite(HOME[id][0], HOME[id][1], id, 0).setOrigin(0.5, 1).play({ key: `${id}-idle`, startFrame: id.length % 3 }));
-    this.herois = { mico: make('mico'), onca: make('onca'), lontra: make('lontra') };
-    // Em casa: o mico no toldo da lojinha (na frente dele), a lontra na bica
-    this.herois.mico.setDepth(770);
-    this.herois.lontra.setFlipX(true).setDepth(HOME.lontra[1]);
-    this.herois.onca.setDepth(HOME.onca[1]);
+    if (this.save) this.spawnPlayer();
+  }
+
+  /** O bicho do jogo salvo aparece no meio do salão. */
+  private spawnPlayer(): void {
+    this.player?.destroy();
+    const id = this.save!.heroi;
+    this.player = this.world(this.add.sprite(HOME[0], HOME[1], id, 0).setOrigin(0.5, 1).setDepth(HOME[1]).play(`${id}-idle`));
   }
 
   /** Noite dentro do tronco: escurece tudo e soma a luz dos fungos, do nó da casca e dos potes. */
@@ -251,8 +259,8 @@ export class HubScene extends Phaser.Scene {
   private renderHud(pulse = false): void {
     if (!this.save) return;
     const { g, nome, nivel, sementes, dica } = this.hudParts;
-    const h = this.save.herois[this.ativo];
-    nome.setText(NOMES[this.ativo]);
+    const h = this.save.ficha;
+    nome.setText(NOMES[this.save.heroi]);
     nivel.setText(`Nv ${h.nivel}`).setX(nome.x + nome.width + 10);
     const barX = nivel.x + nivel.width + 12;
     const w1 = barX + 110 + 16 - 14;
@@ -315,7 +323,7 @@ export class HubScene extends Phaser.Scene {
     legenda.setText(m.confirmar
       ? 'Isso apaga o jogo salvo. Aperte de novo pra confirmar.'
       : s
-        ? `Jogo salvo: ${NOMES.onca.split('-')[0]} nível ${s.herois.onca.nivel} · ${s.sementes} sementes · ${quando(s.salvoEm)}`
+        ? `Jogo salvo: ${NOMES[s.heroi]}, nível ${s.ficha.nivel} · ${s.sementes} sementes · ${quando(s.salvoEm)}`
         : 'Nenhum jogo salvo ainda.');
   }
 
@@ -333,11 +341,13 @@ export class HubScene extends Phaser.Scene {
         m.confirmar = true;
         return this.paintMenu();
       }
-      this.save = novoJogo();
-      salvar(this.save);
-      return this.startFromMenu(true);
+      return this.openHeroSelect();
     }
-    if (m.sel === 1) return this.save ? this.startFromMenu(false) : undefined;
+    if (m.sel === 1) {
+      if (!this.save) return;
+      if (!this.player) this.spawnPlayer();
+      return this.startFromMenu(false);
+    }
     m.root.destroy();
     this.menu = null;
     this.estado = 'creditos';
@@ -346,11 +356,12 @@ export class HubScene extends Phaser.Scene {
 
   /** Entrada (1B): o menu some e a câmera desce pelo tronco até o salão. */
   private startFromMenu(primeira: boolean): void {
-    const m = this.menu!;
+    const root = (this.menu ?? this.escolha)!.root;
     this.menu = null;
+    this.escolha = null;
     this.estado = 'entrando';
-    this.tweens.add({ targets: m.root, alpha: 0, duration: D.curto, onComplete: () => m.root.destroy() });
-    const player = this.herois[this.ativo];
+    this.tweens.add({ targets: root, alpha: 0, duration: D.curto, onComplete: () => root.destroy() });
+    const player = this.player!;
     const cam = this.cameras.main;
     const targetY = Phaser.Math.Clamp(player.y - GAME_HEIGHT / 2 - 20, 0, cam.getBounds().height - GAME_HEIGHT);
     const done = () => {
@@ -367,7 +378,7 @@ export class HubScene extends Phaser.Scene {
   /** Salão no controle do jogador: câmera segue o bicho com atraso (guia: 2C traduzido pro 2D). */
   private enterHub(snap: boolean): void {
     this.estado = 'livre';
-    const player = this.herois[this.ativo];
+    const player = this.player!;
     this.cameras.main.startFollow(player, true, 0.08, 0.08, 0, 40);
     if (snap) this.cameras.main.centerOn(player.x, player.y - 40);
     this.hud.setVisible(true);
@@ -385,25 +396,88 @@ export class HubScene extends Phaser.Scene {
     this.tweens.add({ targets: cam, scrollY: 0, duration: D.base, ease: 'Cubic.easeInOut', onComplete: go });
   }
 
+  // ---------- escolha do herói (Novo jogo) ----------
+
+  private openHeroSelect(): void {
+    this.menu?.root.destroy();
+    this.menu = null;
+    this.estado = 'escolha';
+    this.escolha = { root: this.ui(this.add.container(0, 0)), sel: 1 };
+    this.paintHeroSelect();
+  }
+
+  /** Três cartões lado a lado: o bicho, o estilo, como ele passa pelas ameaças e os atributos de começo. */
+  private paintHeroSelect(): void {
+    const e = this.escolha!;
+    e.root.removeAll(true);
+    const w = 284;
+    const gap = 16;
+    const x0 = (GAME_WIDTH - (w * 3 + gap * 2)) / 2;
+    const y = 96;
+    const parts: Phaser.GameObjects.GameObject[] = [
+      this.add.rectangle(0, 0, GAME_WIDTH, GAME_HEIGHT, OCO.noite, 0.7).setOrigin(0),
+      this.add.text(GAME_WIDTH / 2, 50, 'Escolha seu bicho', { fontFamily: FONT_HUB, fontSize: '40px', color: css(OCO.ambarClaro) }).setOrigin(0.5),
+    ];
+    HEROIS.forEach((id, i) => {
+      const x = x0 + i * (w + gap);
+      const on = i === e.sel;
+      const g = this.add.graphics();
+      drawBark(g, x, y, w, 390, { focus: on });
+      const base = ATTRS_INICIAIS[id];
+      const attrs = ATTRS.map((a) => `${a.nome} ${base[a.id] ?? 1}`).join('   ');
+      const t = (s: string, dy: number, o: Phaser.Types.GameObjects.Text.TextStyle) =>
+        this.add.text(x + 18, y + dy, s, { fontFamily: FONT_TEXT, fontSize: '13px', color: css(OCO.seiva), wordWrap: { width: w - 36 }, lineSpacing: 3, ...o });
+      parts.push(
+        g,
+        this.add.sprite(x + w / 2, y + 128, id, 0).setOrigin(0.5, 1).setScale(3).play(on ? `${id}-run` : `${id}-idle`).setAlpha(on ? 1 : 0.6),
+        t(NOMES[id], 146, { fontFamily: FONT_HUB, fontSize: '26px', color: css(OCO.ambarClaro) }),
+        t(ESTILOS[id].estilo, 182, { fontSize: '16px', color: css(OCO.ambar) }),
+        t(ESTILOS[id].jeito, 210, {}),
+        t(attrs, 304, { color: css(OCO.cinza), fontSize: '12px' }),
+      );
+    });
+    parts.push(this.add.text(GAME_WIDTH / 2, GAME_HEIGHT - 26, '← → escolher  ·  E começar  ·  Esc voltar', { fontFamily: FONT_TEXT, fontSize: '13px', color: css(OCO.cinza) }).setOrigin(0.5));
+    e.root.add(parts);
+  }
+
+  private moveHeroSelect(d: number): void {
+    const e = this.escolha!;
+    e.sel = (e.sel + d + HEROIS.length) % HEROIS.length;
+    this.paintHeroSelect();
+  }
+
+  private chooseHero(): void {
+    this.save = novoJogo(HEROIS[this.escolha!.sel]);
+    salvar(this.save);
+    this.spawnPlayer();
+    this.startFromMenu(true);
+  }
+
+  private closeHeroSelect(): void {
+    this.escolha?.root.destroy();
+    this.escolha = null;
+    this.openMenu();
+  }
+
   // ---------- andar ----------
 
   private walk(delta: number): void {
     const k = this.keys;
     let dx = (k.D.isDown || k.RIGHT.isDown ? 1 : 0) - (k.A.isDown || k.LEFT.isDown ? 1 : 0);
     let dy = (k.S.isDown || k.DOWN.isDown ? 1 : 0) - (k.W.isDown || k.UP.isDown ? 1 : 0);
-    const p = this.herois[this.ativo];
+    const p = this.player!;
     if (dx || dy) {
       const len = Math.hypot(dx, dy);
       dx /= len;
       dy /= len;
-      const step = (SPEED[this.ativo] * Math.min(delta, 50)) / 1000;
+      const step = (SPEED[this.save!.heroi] * Math.min(delta, 50)) / 1000;
       // Um eixo de cada vez: dá pra deslizar encostado na parede ou no balcão
       if (this.free(p.x + dx * step, p.y)) p.x += dx * step;
       if (this.free(p.x, p.y + dy * step)) p.y += dy * step;
       if (dx) p.setFlipX(dx < 0);
-      p.play(`${this.ativo}-run`, true);
+      p.play(`${this.save!.heroi}-run`, true);
     } else {
-      p.play(`${this.ativo}-idle`, true);
+      p.play(`${this.save!.heroi}-idle`, true);
     }
     p.setDepth(p.y);
     this.playerGlow.setPosition(p.x, p.y - 20);
@@ -433,25 +507,6 @@ export class HubScene extends Phaser.Scene {
       else t.root.setAlpha(0.5);
     }
     this.near = near;
-  }
-
-  private swap(id: HeroId): void {
-    if (id === this.ativo) return;
-    const old = this.herois[this.ativo];
-    const next = this.herois[id];
-    next.setPosition(old.x, old.y).setFlipX(old.flipX).setDepth(old.y);
-    old.setPosition(...HOME[this.ativo]).setDepth(this.ativo === 'mico' ? 770 : HOME[this.ativo][1]);
-    old.play(`${this.ativo}-idle`, true);
-    this.ativo = id;
-    this.cameras.main.startFollow(next, true, 0.08, 0.08, 0, 40);
-    this.renderHud();
-  }
-
-  /** Os que estão em casa ficam parados olhando pro salão. */
-  private idleOthers(_time: number): void {
-    for (const id of Object.keys(this.herois) as HeroId[]) {
-      if (id !== this.ativo || this.estado !== 'livre') this.herois[id].play(`${id}-idle`, true);
-    }
   }
 
   // ---------- Ubiraçá ----------
@@ -567,8 +622,7 @@ export class HubScene extends Phaser.Scene {
       ];
       if (open) {
         items.push(
-          t(`Leva: ${m.leva}`, 92, { color: css(OCO.seiva) }),
-          t(`Recompensa: ${m.recompensa} sementes · ${m.xp} XP`, 112, { color: css(OCO.seiva) }),
+          t(`Recompensa: ${m.recompensa} sementes · ${m.xp} XP`, 104, { color: css(OCO.seiva) }),
           t(feitas ? `Feita ${feitas}×` : on ? 'E  aceitar trilha' : '', 146, { color: css(on ? OCO.ambar : OCO.cinza) }),
         );
       }
@@ -605,7 +659,7 @@ export class HubScene extends Phaser.Scene {
     this.estado = 'saindo';
     salvar(this.save!);
     new LeafCurtain(this, 100).close().then(() =>
-      this.time.delayedCall(D.curto, () => this.scene.start('Game', { curtain: true, missao: m.id, seed: m.seed, world: m.world })));
+      this.time.delayedCall(D.curto, () => this.scene.start('Game', { curtain: true, missao: m.id, heroi: this.save!.heroi, seed: m.seed, world: m.world })));
   }
 
   private endTalk(): void {
@@ -614,7 +668,7 @@ export class HubScene extends Phaser.Scene {
     this.panel?.destroy();
     this.panel = null;
     const cam = this.cameras.main;
-    const player = this.herois[this.ativo];
+    const player = this.player!;
     const reduced = reducedMotion();
     const dur = reduced ? 0 : D.base;
     const back = () => {
@@ -693,7 +747,7 @@ export class HubScene extends Phaser.Scene {
     this.sel = sel;
     const first = this.estado !== 'ficha';
     this.estado = 'ficha';
-    const h = this.save.herois[this.ativo];
+    const h = this.save.ficha;
     const w = 420;
     const x = GAME_WIDTH - w - 24;
     const y = 74;
@@ -702,7 +756,7 @@ export class HubScene extends Phaser.Scene {
     drawBark(g, x, y, w, ph);
     const parts: Phaser.GameObjects.GameObject[] = [
       g,
-      this.add.text(x + 22, y + 16, NOMES[this.ativo], { fontFamily: FONT_HUB, fontSize: '30px', color: css(OCO.ambarClaro) }),
+      this.add.text(x + 22, y + 16, NOMES[this.save.heroi], { fontFamily: FONT_HUB, fontSize: '30px', color: css(OCO.ambarClaro) }),
       this.add.text(x + w - 22, y + 24, `Nível ${h.nivel}`, { fontFamily: FONT_TEXT, fontSize: '16px', color: css(OCO.seiva) }).setOrigin(1, 0),
     ];
     const bar = this.add.graphics();
@@ -720,7 +774,7 @@ export class HubScene extends Phaser.Scene {
       parts.push(b, this.add.text(x + w - 42, ry + 10, '+', { fontFamily: FONT_TEXT, fontSize: '16px', color: css(on && h.pontos > 0 ? OCO.casca : OCO.seiva) }).setOrigin(0.5).setAlpha(h.pontos > 0 ? 1 : 0.4));
     });
     parts.push(this.add.text(x + 22, y + 266, h.pontos > 0 ? `${h.pontos} ${h.pontos === 1 ? 'ponto' : 'pontos'} pra distribuir  ·  E ou → soma` : 'Sem pontos: suba de nível nas missões', { fontFamily: FONT_TEXT, fontSize: '13px', color: css(OCO.cinza) }));
-    HABILIDADES[this.ativo].forEach(([key, nome], i) => {
+    HABILIDADES[this.save.heroi].forEach(([key, nome], i) => {
       const cx = x + 22 + i * 76;
       const sg = this.add.graphics();
       drawBark(sg, cx, y + 298, 68, 80);
@@ -739,7 +793,7 @@ export class HubScene extends Phaser.Scene {
 
   private assignPoint(): void {
     const a = ATTRS[this.sel];
-    if (!distribuir(this.save!.herois[this.ativo], a.id)) return;
+    if (!distribuir(this.save!.ficha, a.id)) return;
     salvar(this.save!);
     this.openSheet(this.sel);
     this.renderHud();
@@ -756,22 +810,19 @@ export class HubScene extends Phaser.Scene {
     let subiu = 0;
     if (m) {
       s.missoes[m.id] = (s.missoes[m.id] ?? 0) + 1;
-      for (const id of Object.keys(s.herois) as HeroId[]) {
-        const n = ganharXp(s.herois[id], m.xp);
-        if (id === this.ativo) subiu = n;
-      }
+      subiu = ganharXp(s.ficha, m.xp);
     }
     salvar(s);
     this.renderHud(true);
     const msg = m ? `${m.nome}: +${r.sementes + m.recompensa} sementes · +${m.xp} XP` : `+${r.sementes} sementes`;
     this.toast(msg);
-    if (subiu) this.levelUp(s.herois[this.ativo].nivel);
+    if (subiu) this.levelUp(s.ficha.nivel);
   }
 
   private levelUp(nivel: number): void {
     this.floatText(`Nível ${nivel}!`);
     if (reducedMotion()) return;
-    const p = this.herois[this.ativo];
+    const p = this.player!;
     // Pulinho de 4 px de arte e a luz do salão pulsando uma vez
     this.tweens.add({ targets: p, y: p.y - 8, duration: 125, yoyo: true, ease: 'Sine.Out' });
     for (const g of this.glows) {
@@ -782,7 +833,7 @@ export class HubScene extends Phaser.Scene {
 
   /** Texto que sobe da cabeça do bicho e some em 800 ms. */
   private floatText(s: string): void {
-    const p = this.herois[this.ativo];
+    const p = this.player!;
     const t = this.world(this.add.text(p.x, p.y - 44, s, { fontFamily: FONT_HUB, fontSize: '22px', color: css(OCO.ambar) }).setOrigin(0.5, 1).setDepth(6001));
     t.setShadow(0, 2, css(OCO.noite), 0, false, true);
     if (reducedMotion()) {

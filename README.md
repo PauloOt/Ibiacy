@@ -1,6 +1,6 @@
 # Ibiacy
 
-Plataforma 2D de navegador com fauna brasileira. Você controla um time de animais e troca de herói na hora (até no meio do pulo) pra passar pelos obstáculos de cada bioma.
+Plataforma 2D de navegador com fauna brasileira. No Novo jogo você escolhe seu bicho (mico, onça ou lontra) e joga com ele as missões que o Ubiraçá dá; cada bicho passa pelos obstáculos do seu jeito.
 
 O MVP tem 1 bioma (Mata Atlântica), 3 heróis e 1 fase completa. Escopo em [docs/escopo-mvp.md](docs/escopo-mvp.md), andamento em [PROGRESSO.md](PROGRESSO.md).
 
@@ -17,9 +17,9 @@ npm run build      # checa tipos e gera dist/
 
 O jogo abre no menu (Novo jogo, Carregar jogo, Créditos) e depois no hub: um salão dentro de uma árvore gigante, em pixel art visto de cima. Lá você fala com o Ubiraçá (E) pra escolher a missão, compra na lojinha do quati e abre a ficha do bicho (C) pra distribuir pontos. O jogo fica salvo no navegador.
 
-A fase é um mundo grande gerado por semente, no estilo do Terraria: copas das árvores, superfície, lagos e cavernas. Os focos de fogo e as armadilhas espalhados são as metas; limpou todas, a mata está protegida.
+A fase é um mundo grande gerado por semente, no estilo do Terraria: copas das árvores, superfície, lagos, um rio com correnteza e cavernas. Focos de fogo, laços de caçador e máquinas de desmatamento são as metas; limpou todas, a mata está protegida. No caminho tem uma frente de fogo que avança atrás de você.
 
-`http://localhost:5180/?debug` mostra as caixas de colisão, `?galeria` mostra todas as animações dos heróis, `?fase` pula o lobby e `?semente=42` fixa o mundo.
+`http://localhost:5180/?debug` mostra as caixas de colisão, `?galeria` mostra todas as animações dos heróis, `?fase` pula o menu e o hub, `?heroi=mico` escolhe o bicho da fase e `?semente=42` fixa o mundo.
 
 ## Controles
 
@@ -29,8 +29,7 @@ A fase é um mundo grande gerado por semente, no estilo do Terraria: copas das �
 | Pular (segurar = mais alto) | Espaço |
 | Habilidade | J ou Shift |
 | Cavar pra baixo (onça) | ↓ + J |
-| Trocar herói direto | 1, 2, 3 |
-| Trocar em ciclo | Q / E |
+| Desarmar laço (do lado dele) | segurar ↓ por 1 s |
 | Escalar / nadar | W / S ou setas |
 | Pausa | Esc |
 
@@ -59,7 +58,7 @@ src/
   config.ts          números do jogo (gravidade, coyote time, cooldowns)
   core/              lógica pura, sem Phaser, com testes: pulo, vida do time, leitura do mapa, gerador do mundo
   heroes/            Hero (base) + Mico, Onca, Lontra
-  team/TeamManager   os 3 heróis, vida compartilhada e a troca
+  team/TeamManager   o herói da fase, a vida e o checkpoint (ainda sabe trocar, mas a fase só põe um)
   scenes/            Boot, Hub (menu e salão), Game, Hud, Pause; terrain tem as camadas e o fundo, worldmap monta o mundo gerado (Tilemap)
   hub/               jogo salvo (nível, XP, atributos, loja) e o conteúdo: missões, itens, falas
   ui/                fichas do guia visual e de movimento, painel de casca, tábua de madeira, cortina de folhas

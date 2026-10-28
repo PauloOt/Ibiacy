@@ -21,7 +21,19 @@ export interface WorldOptions {
   acampamento?: boolean;
   /** Gruta com poça e foco de fogo (0 ou 1) */
   gruta?: boolean;
+  /** Rio largo com correnteza pro oeste: só a lontra atravessa nadando contra (0 ou 1) */
+  rio?: boolean;
+  /** Frente de fogo que avança pela superfície depois do rio, até o lago seguinte (0 ou 1) */
+  frente?: boolean;
+  /** Máquinas de desmatamento patrulhando a superfície (até 4) */
+  maquinas?: number;
 }
+
+/** Retângulo de água com correnteza, em tiles (inclusive). `dir` -1 = pro oeste. */
+export interface Corrente { x0: number; x1: number; y0: number; y1: number; dir: 1 | -1 }
+
+/** Frente de fogo: nasce em `start` quando o bicho passa de `trigger` e anda até `stop` (colunas). */
+export interface Frente { start: number; trigger: number; stop: number }
 
 export interface World {
   seed: number;
@@ -30,8 +42,10 @@ export interface World {
   rows: string[];
   /** Linha do primeiro tile de chão de cada coluna (sem contar árvore) */
   surface: number[];
-  /** Fogos + armadilhas: o time vence quando sumirem todos */
+  /** Fogos + armadilhas + máquinas: o time vence quando sumirem todos */
   metas: number;
+  correntes: Corrente[];
+  frentes: Frente[];
 }
 
 // ---------- trechos fixos ----------
@@ -121,7 +135,7 @@ class Grid {
   }
 }
 
-interface Lake { cx: number; half: number; depth: number; y: number }
+interface Lake { cx: number; half: number; depth: number; y: number; flat?: boolean }
 
 // ---------- geração ----------
 
@@ -155,6 +169,15 @@ export function generateWorld(opts: WorldOptions): World {
     flatten(cx - half - 2, cx + half + 12, surface[cx]);
     lakes.push({ cx, half, depth: 4 + Math.floor(rand() * 3), y: surface[cx] });
   });
+  // Rio: largo demais pro pulo de qualquer bicho, fundo chato, entre o primeiro lago e o acampamento
+  const rivers: Lake[] = [];
+  if (opts.rio ?? true) {
+    const half = 13;
+    const cx = Math.round(W * 0.385);
+    flatten(cx - half - 4, cx + half + 4, surface[cx]);
+    rivers.push({ cx, half, depth: 4, y: surface[cx], flat: true });
+  }
+  const waters = [...lakes, ...rivers];
 
   // Degrau de no máximo 1 tile entre colunas: todo bicho sobe pulando (a onça pula só ~2 tiles)
   for (let pass = 0; pass < 2; pass++) {
@@ -167,6 +190,7 @@ export function generateWorld(opts: WorldOptions): World {
   const reserve = (x0: number, x1: number) => { for (let x = x0; x <= x1; x++) reserved.add(x); };
   reserve(0, 48);
   for (const l of lakes) reserve(l.cx - l.half - 4, l.cx + l.half + 12);
+  for (const r of rivers) reserve(r.cx - r.half - 5, r.cx + r.half + 5);
 
   // Trechos de subsolo: posição escolhida já, pra reservar a coluna do poço
   const camp = opts.acampamento ?? true ? { x: Math.round(W * 0.45), y: 0 } : null;
@@ -185,7 +209,7 @@ export function generateWorld(opts: WorldOptions): World {
   for (let x = 0; x < W; x++) for (let y = H - 2; y < H; y++) g.set(x, y, 'S');
 
   // 3. Cavernas: túneis (faixa estreita do ruído) e salões (picos), mais abertas no fundo
-  const nearLake = (x: number) => lakes.some((l) => Math.abs(x - l.cx) <= l.half + 2);
+  const nearLake = (x: number) => waters.some((l) => Math.abs(x - l.cx) <= l.half + 2);
   for (let x = 1; x < W - 1; x++) {
     const top = surface[x] + (nearLake(x) ? 16 : 12);
     for (let y = top + 1; y < H - 2; y++) {
@@ -196,11 +220,20 @@ export function generateWorld(opts: WorldOptions): World {
     }
   }
 
-  // 4. Bacia dos lagos, cheia até a borda
-  for (const l of lakes) {
+  // 4. Bacia dos lagos e leito do rio, cheios até a borda
+  for (const l of waters) {
     for (let dx = -l.half; dx <= l.half; dx++) {
-      const d = Math.max(1, Math.round(l.depth * (1 - (dx / (l.half + 1)) ** 2)));
+      const edge = l.half - Math.abs(dx);
+      const d = l.flat ? Math.min(l.depth, edge + 2) : Math.max(1, Math.round(l.depth * (1 - (dx / (l.half + 1)) ** 2)));
       for (let y = l.y; y < l.y + d; y++) g.set(l.cx + dx, y, '~');
+    }
+  }
+
+  // Galhos altos sobre o rio: só o pulo duplo do mico alcança (a lontra nada, a onça cava por baixo)
+  for (const r of rivers) {
+    for (let x = r.cx - r.half + 1; x < r.cx + r.half; x += 5) {
+      g.set(x, r.y - 5, '=');
+      g.set(x + 1, r.y - 5, '=');
     }
   }
 
@@ -270,6 +303,29 @@ export function generateWorld(opts: WorldOptions): World {
   // Paredes nas pontas, do chão pra baixo
   for (const x of [0, W - 1]) for (let y = surface[x]; y < H; y++) g.set(x, y, 'S');
 
+  // Máquinas: em trechos de chão livre da metade leste, longe de água e poço
+  const maquinas: number[] = [];
+  for (const f of [0.52, 0.68, 0.76, 0.88].slice(0, Math.min(4, opts.maquinas ?? 2))) {
+    for (let d = 0; d <= 16; d++) {
+      const x = Math.round(f * W) + (d % 2 ? -1 : 1) * Math.ceil(d / 2);
+      if (reserved.has(x) || g.get(x, surface[x]) !== '#' || !'.|'.includes(g.get(x, surface[x] - 1))) continue;
+      g.set(x, surface[x] - 1, 'M');
+      maquinas.push(x);
+      reserve(x - 3, x + 3);
+      break;
+    }
+  }
+
+  // Correnteza do rio e frente de fogo depois dele (até a margem do lago seguinte)
+  const correntes: Corrente[] = rivers.map((r) => ({ x0: r.cx - r.half, x1: r.cx + r.half, y0: r.y, y1: r.y + r.depth - 1, dir: -1 }));
+  const frentes: Frente[] = [];
+  if (opts.frente ?? true) {
+    const start = rivers.length ? rivers[0].cx + rivers[0].half + 6 : Math.round(W * 0.42);
+    const next = lakes.find((l) => l.cx - l.half > start + 30);
+    const stop = next ? next.cx - next.half - 1 : Math.min(W - 10, start + 90);
+    if (stop > start + 20) frentes.push({ start, trigger: start + 16, stop });
+  }
+
   // 9. Checkpoints a cada ~100 tiles, numa coluna de chão livre
   for (let cx = 100; cx < W - 20; cx += 100) {
     for (let d = 0; d <= 12; d++) {
@@ -295,7 +351,7 @@ export function generateWorld(opts: WorldOptions): World {
   }
   for (const l of lakes) if (g.get(l.cx, l.y + l.depth - 1) === '~') g.set(l.cx, l.y + l.depth - 1, 'o');
 
-  return { seed, width: W, height: H, rows: g.c.map((r) => r.join('')), surface, metas: g.count('FT') };
+  return { seed, width: W, height: H, rows: g.c.map((r) => r.join('')), surface, metas: g.count('FTM'), correntes, frentes };
 }
 
 /** Água desce até apoiar em algo: não sobra água boiando em cima de ar. */

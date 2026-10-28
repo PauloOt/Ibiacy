@@ -13,6 +13,7 @@
  *   S  pedra (não cava)      =  galho (dá pra subir por baixo)
  *   %  copa (idem)           |  tronco (fundo, não colide)
  *   #  aqui é terra: a onça cava
+ *   M  máquina de desmatamento
  */
 
 export interface TilePos { tx: number; ty: number }
@@ -29,10 +30,12 @@ export interface ParsedLevel {
   traps: TilePos[];
   seeds: TilePos[];
   checkpoints: TilePos[];
+  /** Máquinas de desmatamento (patrulham; a investida da onça desliga) */
+  machines: TilePos[];
   start: TilePos;
 }
 
-const KNOWN = new Set('#LV~FT*oCP.S=%|'.split(''));
+const KNOWN = new Set('#LV~FT*oCP.S=%|M'.split(''));
 
 export function parseLevel(rows: readonly string[]): ParsedLevel {
   if (rows.length === 0) throw new Error('Fase vazia');
@@ -47,6 +50,7 @@ export function parseLevel(rows: readonly string[]): ParsedLevel {
   const traps: TilePos[] = [];
   const seeds: TilePos[] = [];
   const checkpoints: TilePos[] = [];
+  const machines: TilePos[] = [];
   let start: TilePos | undefined;
 
   padded.forEach((row, ty) => {
@@ -68,6 +72,7 @@ export function parseLevel(rows: readonly string[]): ParsedLevel {
       else if (ch === 'T') traps.push(pos);
       else if (ch === '*' || ch === 'o') seeds.push(pos);
       else if (ch === 'C') checkpoints.push(pos);
+      else if (ch === 'M') machines.push(pos);
       else if (ch === 'P') {
         if (start) throw new Error('A fase tem mais de um P');
         start = pos;
@@ -76,7 +81,7 @@ export function parseLevel(rows: readonly string[]): ParsedLevel {
   });
 
   if (!start) throw new Error('A fase não tem P (início)');
-  return { width, height: grid.length, grid, solids, breakables, fires, traps, seeds, checkpoints, start };
+  return { width, height: grid.length, grid, solids, breakables, fires, traps, seeds, checkpoints, machines, start };
 }
 
 /** Caractere do tile; fora do mapa é parede nas laterais e vazio acima/abaixo (dá pra cair no abismo). */

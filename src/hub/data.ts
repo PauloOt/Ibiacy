@@ -9,7 +9,6 @@ export interface Missao {
   nome: string;
   lugar: string;
   meta: string;
-  leva: string;
   recompensa: number;
   xp: number;
   seed: number;
@@ -20,16 +19,16 @@ export interface Missao {
 
 export const MISSOES: readonly Missao[] = [
   {
-    id: 'queimada', nome: 'Queimada no vale', lugar: 'Serra do Mar', meta: 'apagar os focos de fogo', leva: 'Lontra',
-    recompensa: 40, xp: 120, seed: 1101, world: { lakes: 3, queimadas: 2, acampamento: false, gruta: true },
+    id: 'queimada', nome: 'Queimada no vale', lugar: 'Serra do Mar', meta: 'apagar os focos de fogo e fugir da frente de fogo',
+    recompensa: 40, xp: 120, seed: 1101, world: { lakes: 3, queimadas: 2, acampamento: false, gruta: true, rio: true, frente: true, maquinas: 0 },
   },
   {
-    id: 'acampamento', nome: 'Acampamento de caçadores', lugar: 'Encosta', meta: 'quebrar as armadilhas', leva: 'Onça',
-    recompensa: 35, xp: 120, seed: 2202, world: { lakes: 1, queimadas: 0, acampamento: true, gruta: false },
+    id: 'acampamento', nome: 'Acampamento de caçadores', lugar: 'Encosta', meta: 'desarmar os laços e parar a máquina',
+    recompensa: 35, xp: 120, seed: 2202, world: { lakes: 1, queimadas: 0, acampamento: true, gruta: false, rio: false, frente: false, maquinas: 1 },
   },
   {
-    id: 'maquina', nome: 'A máquina na encosta', lugar: 'Encosta', meta: 'limpar todas as ameaças', leva: 'Os três',
-    recompensa: 80, xp: 200, seed: 3303, world: { lakes: 3, queimadas: 2, acampamento: true, gruta: true }, precisa: ['queimada', 'acampamento'],
+    id: 'maquina', nome: 'As máquinas na encosta', lugar: 'Encosta', meta: 'parar as máquinas e limpar todas as ameaças',
+    recompensa: 80, xp: 200, seed: 3303, world: { lakes: 3, queimadas: 2, acampamento: true, gruta: true, rio: true, frente: true, maquinas: 4 }, precisa: ['queimada', 'acampamento'],
   },
 ];
 
@@ -49,16 +48,23 @@ export const LOJA: readonly Item[] = [
 
 export const FALAS = {
   primeira: [
-    'Então vocês são os três que a mata mandou. Eu sou Ubiraçá. Já andei por todo canto desta serra, devagar, e guardei os caminhos no casco.',
-    'Lá fora tem fogo, laço de caçador e máquina comendo a encosta. Escolham uma trilha no meu casco e vão.',
+    'Então é você que a mata mandou. Eu sou Ubiraçá. Já andei por todo canto desta serra, devagar, e guardei os caminhos no casco.',
+    'Lá fora tem fogo, laço de caçador e máquina comendo a encosta. Cada bicho passa do seu jeito. Escolha uma trilha no meu casco e vá.',
   ],
   volta: [
-    'Vocês três voltaram inteiros. Bom.',
-    'Lá embaixo, no vale, a fumaça subiu de novo. Escolham uma trilha no meu casco: cada risco é um caminho que eu já andei.',
+    'Voltou inteiro. Bom.',
+    'Lá embaixo, no vale, a fumaça subiu de novo. Escolha uma trilha no meu casco: cada risco é um caminho que eu já andei.',
   ],
 };
 
 export const NOMES: Record<HeroId, string> = { mico: 'Mico-leão-dourado', onca: 'Onça-pintada', lontra: 'Lontra' };
+
+/** O que aparece na escolha do herói: o estilo e como cada um passa pelas ameaças. */
+export const ESTILOS: Record<HeroId, { estilo: string; jeito: string }> = {
+  onca: { estilo: 'Força', jeito: 'Investida que quebra tronco, laço e máquina. Cava terra (até por baixo do rio) e abafa o fogo.' },
+  mico: { estilo: 'Agilidade', jeito: 'Pulo duplo e escalada. Atravessa o rio pelos galhos altos e foge do fogo pelas copas.' },
+  lontra: { estilo: 'Água', jeito: 'Nada contra a correnteza e mergulha. Saindo da água molhada, apaga fogo.' },
+};
 
 /** Habilidades por tecla. Só a da onça tem exemplo; mico e lontra ainda estão em aberto. */
 export const HABILIDADES: Record<HeroId, readonly [string, string][]> = {

@@ -2,6 +2,15 @@
 
 Resumo do documento "Jogo Biomas BR — Escopo do MVP" (28/10/2026). O nome provisório do jogo é **Ibiacy**.
 
+## O que mudou desde o documento (28/10/2026)
+
+O resto deste arquivo é o escopo original. Estas decisões do Paulo, tomadas durante o desenvolvimento, valem por cima dele:
+
+- **Um herói só, escolhido no Novo jogo.** Não existe mais troca de bicho nem time: você joga o jogo inteiro com o mico, a onça ou a lontra. O pilar "a troca de herói é o coração do jogo" caiu.
+- **Toda missão dá pra fazer com qualquer herói; cada um passa do seu jeito** (tabela em [herois.md](herois.md)).
+- **A fase virou um mundo grande gerado por semente**, no estilo do Terraria (copas, superfície, lagos, rio, cavernas), com metas espalhadas no lugar dos 5 trechos fixos no Tiled.
+- **Entraram:** menu inicial, hub andável dentro de uma árvore (Ubiraçá dá as missões), lojinha, ficha do herói com 5 atributos e jogo salvo. No documento eles estavam fora ("save", "loja e upgrades", "diálogos").
+
 ## Visão geral
 
 Plataforma 2D de navegador em que o jogador controla um time de animais brasileiros e troca de herói na hora pra vencer os obstáculos de cada bioma. O MVP tem 1 bioma (Mata Atlântica), 3 heróis e 1 fase completa, jogável do começo ao fim.

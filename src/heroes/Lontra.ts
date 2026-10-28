@@ -1,5 +1,4 @@
 import type Phaser from 'phaser';
-import { WET_MS } from '../config';
 import { approach, Hero, type HeroContext } from './Hero';
 
 const SWIM_SPEED = 200;
@@ -11,7 +10,6 @@ const FLOAT_SPEED = -30;
 /** Lontra-neotropical: água. Nada e mergulha sem se afogar; lenta em terra. */
 export class Lontra extends Hero {
   readonly id = 'lontra';
-  private wetUntil = -Infinity;
 
   constructor(scene: Phaser.Scene) {
     super(scene, 'lontra', {
@@ -23,10 +21,6 @@ export class Lontra extends Hero {
       width: 32,
       height: 18,
     });
-  }
-
-  isWet(now: number): boolean {
-    return now < this.wetUntil;
   }
 
   protected handleWater(ctx: HeroContext): void {
@@ -57,15 +51,7 @@ export class Lontra extends Hero {
     return this.inWater ? 'swim' : super.animKey(ctx);
   }
 
-  protected onLeaveWater(ctx: HeroContext): void {
-    this.wetUntil = ctx.now + WET_MS;
-  }
-
   useAbility(): void {
     // Fora d'água não faz nada; dentro, o mergulho sai em handleWater().
-  }
-
-  protected onSleep(): void {
-    this.wetUntil = -Infinity;
   }
 }

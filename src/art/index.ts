@@ -2,6 +2,7 @@ import type Phaser from 'phaser';
 import { GAME_HEIGHT, GAME_WIDTH } from '../config';
 import { bushLayer, canopyLayer, mountainLayer, skyLayer } from './background';
 import { addAnim, addCanvasTexture, addSheet, addTileset, bakeHero } from './bake';
+import { maquinaFrames } from './ameacas';
 import { heroArts } from './heroes';
 import { basinFrame, hubRoomFrame, jabutiFrame, lojaFrame, moundFrame, quatiFrames } from './hub';
 import { TILESET, tilesetFrames } from './tileset';
@@ -50,6 +51,8 @@ export function bakeAll(scene: Phaser.Scene): void {
   addSheet(scene, 'jabuti', [jabutiFrame(0), jabutiFrame(1)]);
   addSheet(scene, 'quati', quatiFrames());
   addAnim(scene, 'quati-idle', 'quati', [0, 1, 2, 3], 4);
+  addSheet(scene, 'maquina', maquinaFrames());
+  addAnim(scene, 'maquina-run', 'maquina', [0, 1, 2, 3], 10);
   addSheet(scene, 'heart', heartFrames());
   for (const [name, r] of Object.entries(particleFrames())) addSheet(scene, `p-${name}`, [r]);
 

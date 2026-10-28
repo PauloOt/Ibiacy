@@ -3,7 +3,6 @@ import { MAX_HEARTS, PIXEL_FONT } from '../config';
 import type { HudSnapshot } from '../team/TeamManager';
 
 const TEXT = { fontFamily: PIXEL_FONT, fontSize: '18px', color: '#fff6dc', stroke: '#1a0f14', strokeThickness: 4 };
-const HERO_KEYS = ['mico', 'onca', 'lontra'];
 
 interface Metas {
   done: number;
@@ -18,6 +17,7 @@ export class HudScene extends Phaser.Scene {
   private slots: { frame: Phaser.GameObjects.Rectangle; icon: Phaser.GameObjects.Sprite; label: Phaser.GameObjects.Text }[] = [];
   private lastHearts = MAX_HEARTS;
   private lastSeeds = 0;
+  private keys: string[] = [];
 
   constructor() {
     super('Hud');
@@ -34,18 +34,22 @@ export class HudScene extends Phaser.Scene {
     this.add.sprite(26, 88, 'fire', 0).setScale(0.75);
     this.metas = this.add.text(42, 77, '', TEXT);
 
-    // Retratos dos heróis, da direita pra esquerda
+    // Retrato do herói (um só desde que o jogo virou "escolha seu bicho"; com time, um por bicho)
+    const snap = this.registry.get('hud') as HudSnapshot | undefined;
+    this.keys = snap?.ids ?? ['onca'];
+    this.slots = [];
     let x = width - 16;
-    for (let i = HERO_KEYS.length - 1; i >= 0; i--) {
+    for (let i = this.keys.length - 1; i >= 0; i--) {
       const w = 74;
       const frame = this.add.rectangle(x - w / 2, 30, w, 42, 0x1a0f14, 0.55).setStrokeStyle(2, 0x6b5a3a);
-      const icon = this.add.sprite(x - w / 2 + 6, 32, HERO_KEYS[i], 0).setScale(0.75);
-      const label = this.add.text(x - w + 6, 14, `${i + 1}`, { ...TEXT, fontSize: '14px' });
+      const icon = this.add.sprite(x - w / 2 + 6, 32, this.keys[i], 0).setScale(0.75);
+      const label = this.add.text(x - w + 6, 14, this.keys.length > 1 ? `${i + 1}` : '', { ...TEXT, fontSize: '14px' });
       this.slots[i] = { frame, icon, label };
       x -= w + 8;
     }
 
-    const help = 'A/D andar  ·  Espaço pular  ·  J habilidade  ·  ↓+J onça cava  ·  1 2 3 ou Q/E trocar  ·  Esc pausa';
+    const cava = this.keys.includes('onca') ? '  ·  ↓+J cava' : '';
+    const help = `A/D andar  ·  Espaço pular  ·  J habilidade${cava}  ·  segurar ↓ do lado do laço: desarma  ·  Esc pausa`;
     this.add.text(width / 2, height - 10, help, { ...TEXT, fontSize: '13px', strokeThickness: 3 }).setOrigin(0.5, 1).setAlpha(0.85);
 
     this.registry.events.on('changedata-hud', (_p: unknown, snap: HudSnapshot) => this.render(snap));
@@ -83,7 +87,7 @@ export class HudScene extends Phaser.Scene {
       const on = i === snap.activeIndex;
       frame.setStrokeStyle(2, on ? 0xf5c542 : 0x6b5a3a).setFillStyle(on ? 0x3a2a14 : 0x1a0f14, on ? 0.8 : 0.5);
       icon.setAlpha(on ? 1 : 0.55);
-      if (on) icon.play(`${HERO_KEYS[i]}-idle`, true);
+      if (on) icon.play(`${this.keys[i]}-idle`, true);
       else icon.stop().setFrame(0);
     });
   }

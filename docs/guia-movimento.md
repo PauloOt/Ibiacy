@@ -75,7 +75,7 @@ O spec de cada uma é o da variação escolhida no laboratório.
 
 | Momento | Receita |
 | --- | --- |
-| **Troca de bicho** | 14 folhas, 60–180 px/s, 600 ms, com gravidade |
+| **Troca de bicho** | não existe mais: o jogo virou herói único (as folhas da troca ficaram no código, sem uso) |
 | **Pegar semente** | 8 brilhos em 450 ms; o contador cresce 35% e volta em 200 ms |
 | **Perder coração** | câmera treme 140 ms; o coração cresce 60% e volta com `Back.Out` em 260 ms; o bicho pisca por 1 s |
 | **Retrato ativo** | idle em loop, moldura dourada |

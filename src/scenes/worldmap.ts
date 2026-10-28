@@ -56,6 +56,17 @@ export class WorldMap {
     return true;
   }
 
+  /** A frente de fogo passou: a grama da coluna fica queimada e o tufo vira cinza. */
+  burn(x: number): void {
+    const y = this.surface[x];
+    if (y === undefined) return;
+    for (let k = 0; k < 2; k++) {
+      const tile = this.front.getTileAt(x, y + k);
+      if (tile) tile.tint = k === 0 ? 0x5a4a46 : 0x7a6a66;
+    }
+    this.tufts.get(`${x},${y}`)?.setTint(0x3a3230).stop();
+  }
+
   private paintBack(x: number, y: number): void {
     const h = hash2(x * 7, y * 13);
     if (cellAt(this.level, x, y) === '|') {

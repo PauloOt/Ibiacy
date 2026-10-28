@@ -14,6 +14,7 @@ export interface HudSnapshot {
   hearts: number;
   seeds: number;
   activeIndex: number;
+  ids: string[];
   names: string[];
 }
 
@@ -114,6 +115,7 @@ export class TeamManager extends Phaser.Events.EventEmitter {
       hearts: this.state.hearts,
       seeds: this.state.seeds,
       activeIndex: this.state.activeIndex,
+      ids: this.heroes.map((h) => h.id),
       names: this.heroes.map((h) => h.stats.name),
     };
   }

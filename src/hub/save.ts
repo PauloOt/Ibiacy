@@ -1,6 +1,7 @@
 import type { HeroId } from '../core/TeamState';
 
-// O jogo salvo: sementes, nível e atributos de cada herói, o que foi comprado e as missões feitas.
+// O jogo salvo: o herói escolhido no Novo jogo (um só), o nível e os atributos dele, as sementes,
+// o que foi comprado e as missões feitas.
 // Lógica pura (sem Phaser); quem guarda e lê do localStorage é `carregar`/`salvar`.
 
 export type Attr = 'forca' | 'vigor' | 'velocidade' | 'astucia' | 'inteligencia';
@@ -23,9 +24,11 @@ export interface HeroSave {
 }
 
 export interface Save {
-  v: 1;
+  v: 2;
+  /** O bicho escolhido no Novo jogo: é com ele o jogo inteiro */
+  heroi: HeroId;
+  ficha: HeroSave;
   sementes: number;
-  herois: Record<HeroId, HeroSave>;
   /** Item da lojinha → quantos tem */
   inventario: Record<string, number>;
   /** Missão → quantas vezes completou */
@@ -40,16 +43,18 @@ export const xpParaProximo = (nivel: number) => 100 + (nivel - 1) * 50;
 const attrs = (o: Partial<Record<Attr, number>>): Record<Attr, number> => ({ forca: 1, vigor: 1, velocidade: 1, astucia: 1, inteligencia: 1, ...o });
 
 /** Cada bicho começa puxado pro estilo dele (a onça é força). */
-export function novoJogo(agora = Date.now()): Save {
-  const heroi = (a: Partial<Record<Attr, number>>): HeroSave => ({ nivel: 1, xp: 0, pontos: 0, attrs: attrs(a) });
+export const ATTRS_INICIAIS: Record<HeroId, Partial<Record<Attr, number>>> = {
+  mico: { velocidade: 3, astucia: 2 },
+  onca: { forca: 3, vigor: 2 },
+  lontra: { vigor: 2, inteligencia: 3 },
+};
+
+export function novoJogo(heroi: HeroId, agora = Date.now()): Save {
   return {
-    v: 1,
+    v: 2,
+    heroi,
+    ficha: { nivel: 1, xp: 0, pontos: 0, attrs: attrs(ATTRS_INICIAIS[heroi]) },
     sementes: 0,
-    herois: {
-      mico: heroi({ velocidade: 3, astucia: 2 }),
-      onca: heroi({ forca: 3, vigor: 2 }),
-      lontra: heroi({ vigor: 2, inteligencia: 3 }),
-    },
     inventario: {},
     missoes: {},
     salvoEm: agora,
@@ -87,13 +92,25 @@ export function comprar(s: Save, item: string, preco: number): boolean {
 
 const SAVE_KEY = 'ibiacy-save';
 
+/** Formato antigo, do tempo do time de três bichos. */
+interface SaveV1 extends Omit<Save, 'v' | 'heroi' | 'ficha'> {
+  v: 1;
+  herois: Record<HeroId, HeroSave>;
+}
+
 /** Lê o jogo salvo; null se não tem ou se está estragado. */
 export function carregar(storage: Pick<Storage, 'getItem'> | null = safeStorage()): Save | null {
   try {
     const raw = storage?.getItem(SAVE_KEY);
     if (!raw) return null;
-    const s = JSON.parse(raw) as Save;
-    return s.v === 1 && s.herois?.onca ? s : null;
+    const s = JSON.parse(raw) as Save | SaveV1;
+    if (s.v === 2) return s.ficha && s.heroi ? s : null;
+    // Jogo salvo antes da escolha de herói (time de três): vira jogo da onça
+    if (s.v === 1 && s.herois?.onca) {
+      const { herois, ...resto } = s;
+      return { ...resto, v: 2, heroi: 'onca', ficha: herois.onca };
+    }
+    return null;
   } catch {
     return null;
   }

@@ -24,10 +24,11 @@ describe('generateWorld', () => {
     expect(cellAt(level, tx, ty - 1)).toBe('.');
   });
 
-  it('tem as metas: 2 queimadas, o acampamento e a gruta', () => {
+  it('tem as metas: 2 queimadas, o acampamento, a gruta e 2 máquinas', () => {
     expect(level.fires.length).toBe(3 * 2 + 2);
     expect(level.traps.length).toBe(3);
-    expect(world.metas).toBe(level.fires.length + level.traps.length);
+    expect(level.machines.length).toBe(2);
+    expect(world.metas).toBe(level.fires.length + level.traps.length + level.machines.length);
   });
 
   it('cada fogo fica a até 8 tiles da água (a lontra molhada anda ~9 em 2 s)', () => {
@@ -59,8 +60,37 @@ describe('generateWorld', () => {
     for (let seed = 1; seed <= 20; seed++) {
       const w = generateWorld({ seed });
       const l = parseLevel(w.rows);
-      expect(l.fires.length + l.traps.length).toBe(w.metas);
+      expect(l.fires.length + l.traps.length + l.machines.length).toBe(w.metas);
       expect(cellAt(l, l.start.tx, l.start.ty + 1)).toBe('#');
     }
+  });
+
+  it('rio com correnteza pro oeste, largo demais pra pular, com galhos altos pro mico', () => {
+    expect(world.correntes).toHaveLength(1);
+    const c = world.correntes[0];
+    expect(c.dir).toBe(-1);
+    expect(c.x1 - c.x0).toBeGreaterThanOrEqual(20);
+    expect(cellAt(level, Math.round((c.x0 + c.x1) / 2), c.y0)).toBe('~');
+    let galhos = 0;
+    for (let x = c.x0; x <= c.x1; x++) if (cellAt(level, x, c.y0 - 5) === '=') galhos++;
+    expect(galhos).toBeGreaterThan(4);
+  });
+
+  it('frente de fogo nasce depois do rio e para antes do lago seguinte', () => {
+    expect(world.frentes).toHaveLength(1);
+    const f = world.frentes[0];
+    expect(f.start).toBeGreaterThan(world.correntes[0].x1);
+    expect(f.trigger).toBeGreaterThan(f.start);
+    expect(f.stop).toBeGreaterThan(f.trigger);
+    expect(cellAt(level, f.stop + 1, world.surface[f.stop + 1])).toBe('~');
+  });
+
+  it('máquina nasce em pé no chão da superfície', () => {
+    for (const m of level.machines) expect('#S').toContain(cellAt(level, m.tx, m.ty + 1));
+  });
+
+  it('sem rio, sem frente e sem máquina quando a missão não pede', () => {
+    const w = generateWorld({ seed: 5, rio: false, frente: false, maquinas: 0 });
+    expect([w.correntes.length, w.frentes.length, parseLevel(w.rows).machines.length]).toEqual([0, 0, 0]);
   });
 });

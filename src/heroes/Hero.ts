@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { DROWN_MS, JUMP_CUT, MAX_FALL_SPEED } from '../config';
+import { DROWN_MS, JUMP_CUT, MAX_FALL_SPEED, WET_MS } from '../config';
 import type { JumpAssist } from '../core/JumpAssist';
 import type { HeroId } from '../core/TeamState';
 import type { InputFrame } from '../input/Controls';
@@ -54,6 +54,8 @@ export abstract class Hero extends Phaser.Physics.Arcade.Sprite {
   facing: 1 | -1 = 1;
   protected inWater = false;
   private submergedMs = 0;
+  /** Saiu da água há pouco: qualquer bicho molhado apaga foco de fogo */
+  private wetUntil = -Infinity;
   private wasGrounded = false;
   private lastVy = 0;
 
@@ -80,6 +82,7 @@ export abstract class Hero extends Phaser.Physics.Arcade.Sprite {
     this.body.setAllowGravity(true);
     this.inWater = false;
     this.submergedMs = 0;
+    this.wetUntil = -Infinity;
     this.onSleep();
   }
 
@@ -142,6 +145,7 @@ export abstract class Hero extends Phaser.Physics.Arcade.Sprite {
     if (wasInWater && !this.inWater) {
       this.body.setAllowGravity(true);
       this.submergedMs = 0;
+      this.wetUntil = now + WET_MS;
       this.onLeaveWater(ctx);
     }
     ctx.jump.update(now, grounded && !this.inWater);
@@ -194,9 +198,27 @@ export abstract class Hero extends Phaser.Physics.Arcade.Sprite {
     this.setFlipX(dir < 0);
   }
 
-  /** Padrão: não nada. Afunda devagar e se afoga. A lontra sobrescreve. */
+  isWet(now: number): boolean {
+    return now < this.wetUntil;
+  }
+
+  /**
+   * Padrão: não nada. Com a cabeça fora d'água (beira rasa) anda e pula normal, e sai molhado;
+   * submerso, afunda devagar e se afoga. A lontra sobrescreve.
+   */
   protected handleWater(ctx: HeroContext): void {
     this.body.setAllowGravity(true);
+    // Raso: a água tem 1 tile só (nenhum bicho tem 32 px de altura, então a cabeça não serve de régua)
+    const shallow = !ctx.level.isWater(this.centerX, this.body.bottom - 34) || !ctx.level.isWater(this.centerX, this.body.top + 2);
+    if (shallow) {
+      this.submergedMs = 0;
+      this.run(ctx);
+      if (ctx.jump.hasBufferedPress(ctx.now) && this.grounded) {
+        ctx.jump.consumePress();
+        this.jump(ctx, this.stats.jumpVelocity);
+      }
+      return;
+    }
     this.setVelocityX(this.body.velocity.x * 0.85);
     this.setVelocityY(Math.min(this.body.velocity.y, 120));
     this.submergedMs += ctx.dt;
