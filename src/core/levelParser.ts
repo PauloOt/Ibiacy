@@ -7,6 +7,12 @@
  *   *  semente              o  semente dentro d'água
  *   C  checkpoint (muda)    P  início
  *   .  vazio
+ *
+ * Do mundo gerado (src/core/worldgen.ts):
+ *
+ *   S  pedra (não cava)      =  galho (dá pra subir por baixo)
+ *   %  copa (idem)           |  tronco (fundo, não colide)
+ *   #  aqui é terra: a onça cava
  */
 
 export interface TilePos { tx: number; ty: number }
@@ -26,7 +32,7 @@ export interface ParsedLevel {
   start: TilePos;
 }
 
-const KNOWN = new Set('#LV~FT*oCP.'.split(''));
+const KNOWN = new Set('#LV~FT*oCP.S=%|'.split(''));
 
 export function parseLevel(rows: readonly string[]): ParsedLevel {
   if (rows.length === 0) throw new Error('Fase vazia');

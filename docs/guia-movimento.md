@@ -1,22 +1,25 @@
 # Guia de movimento
 
-Saiu do laboratório de movimento em 28/10/2026, onde 12 momentos do jogo foram mostrados com 3 ou 4 jeitos de animar. A direção proposta foi **"a mata reage"**: a interface quase não se mexe, quem responde é o lugar.
+Saiu de dois laboratórios em 28/10/2026:
+- o da fase e do lobby da clareira (12 momentos, direção "a mata reage");
+- o do hub dentro da árvore (9 momentos, em 3D).
+
+O lobby da clareira foi trocado pelo hub; as escolhas da fase continuam valendo.
 
 ## O princípio
 
-**Na ação, quem responde é o bicho e a HUD, na hora. Na passagem e na calma, quem responde é a mata, devagar.**
+**Na ação, quem responde é o bicho e a HUD, na hora. Fora da ação, quem se mexe é a câmera e o lugar, e a interface só aparece.**
 
-Ele saiu das escolhas, não da direção proposta. Nos momentos de passagem e de calma o Paulo escolheu a mata reagindo em todos:
-- a placa e o painel do lobby;
-- a entrada na trilha;
-- morrer e voltar;
-- o checkpoint;
-- o ar da clareira;
-- a pausa.
+As escolhas que levam a ele:
+- **Na fase:** o Paulo manteve todo feedback de ação como está (troca de bicho, semente, dano, retrato, semente esperando). Nos momentos de passagem e de calma (morte, checkpoint, pausa), escolheu a mata reagindo.
+- **No hub, quem anima é a câmera:** ela desce pelo tronco na entrada, gira em volta do tronco enquanto o bicho anda e chega perto do Ubiraçá na conversa.
+- **No hub, quem reage é o lugar:**
+  - o jabuti levanta a cabeça quando o bicho chega;
+  - a onça pula num anel de luz quando sobe de nível;
+  - o ar tem vaga-lumes.
+- **A interface fica parada:** a lista de missões só aparece e o saldo da lojinha só troca o número. Nenhum painel desliza ou quica.
 
-Nos momentos de ação, ele manteve o que o jogo já faz em todos: a troca de bicho, pegar semente, perder coração, o retrato ativo e a semente esperando no chão. Essa exceção é a regra de verdade.
-
-A pergunta ao animar algo novo: **a pessoa está pulando quando isso acontece?** Se está, a resposta é imediata e fica perto do bicho ou da HUD. Se não está, a resposta pode levar meio segundo, e quem se mexe é a folha, a pétala, o pássaro.
+A pergunta ao animar algo novo: **a pessoa está jogando quando isso acontece?** Se está, a resposta é imediata e fica perto do bicho ou da HUD. Se não está, a resposta pode levar meio segundo ou mais, e quem se mexe é a câmera, o morador ou a mata. Nunca o painel.
 
 ## Fichas
 
@@ -24,49 +27,47 @@ A pergunta ao animar algo novo: **a pessoa está pulando quando isso acontece?**
 
 | Nome | Valor | Onde |
 | --- | --- | --- |
-| `D.ja` | 0 ms | resposta da ação: dano, troca, coleta |
-| `D.curto` | 200 ms | fade de painel, placa acendendo, segurar a cortina fechada |
-| `D.base` | 600 ms | cortina de folhas fechando ou abrindo, folhas até a placa |
+| `D.ja` | 0 ms | resposta da ação; lista e saldo que aparecem |
+| `D.curto` | 200 ms | fade de painel e etiqueta; pulso de número |
+| `D.base` | 600 ms | câmera chegando perto; cortina de folhas |
 | `D.longo` | 1000 ms | ipê crescendo |
+| `D.camera` | 1600 ms | câmera descendo pelo tronco na entrada |
 | `D.reduzido` | 150 ms | o fade que substitui tudo com movimento reduzido |
 
 ### Curvas
 
 | Nome | Uso |
 | --- | --- |
-| `degraus(n)` | o que é da interface: acende em n quadros, não desliza (placa em 3 degraus, ipê em 6 quadros) |
-| `Sine.InOut` | o que balança sem parar: pétala, capim, flutuar da semente |
+| `inOut` (cúbica) | toda câmera: entrada, conversa |
+| `degraus(n)` | o que é de pixel: ipê em 6 quadros, cabeça do jabuti em 1 degrau |
+| `Sine.InOut` | o que balança sem parar: pétala, capim, vaga-lume |
 | `Back.Out` | só o pulo do coração na HUD, que já existe |
 
-Não tem mola. Interface de madeira não quica.
-
-### Quantidades
-
-| Nome | Valor |
-| --- | --- |
-| `N.poucas` | 6 (folhas até a placa) |
-| `N.chuva` | 14 a 16 (pétalas do ipê) |
-| `N.ar` | 8 (pétalas soltas no lobby) |
+Não tem mola.
 
 ## Receitas
 
 O spec de cada uma é o da variação escolhida no laboratório.
 
-### Lobby
+### Hub
 
 | Momento | Receita |
 | --- | --- |
-| **Placa acende quando o bicho chega perto** (1C) | `N.poucas` folhas caem da copa até a placa em `D.base`; a placa vai de 35% a 100% em 3 degraus de 100 ms, começando quando as folhas chegam. Ao se afastar, apaga direto pra 35%. |
-| **Painel de Recorde abre** (2C) | A copa do ipê treme ±2 px (4 px no jogo) por 400 ms, caem 14 pétalas, e o painel entra em fade de `D.curto` depois do tremor. |
-| **Entrar na trilha** (3B) | Cortina de folhas fecha das bordas pro meio em `D.base`, segura `D.curto` e a cena troca escondida. Abre em `D.base` já na fase. |
-| **Painel de Créditos** | Não estava no laboratório; segue a receita do Recorde com a toca no lugar do ipê: `N.poucas` folhas caem do barranco sobre a boca da toca e o painel entra em fade de `D.curto` depois de 400 ms. |
-| **Ar da clareira** (11B) | 8 pétalas do ipê caindo devagar, em loop. Sem poeira de luz no lobby. |
+| **Menu → hub, "Novo jogo"** (1B) | O menu some em `D.curto`. A câmera começa no alto do oco (no escuro, com os fungos) e desce até o salão em `D.camera` com `inOut`. |
+| **Câmera enquanto o bicho anda** (2C, traduzido) | No 3D ela girava em volta do tronco; em 3/4 de cima não tem como girar, então ela segue o bicho com atraso (8% por quadro). Vale conferir jogando se o atraso agrada. |
+| **Chegar perto do Ubiraçá** (3C) | O jabuti levanta a cabeça 1 px de arte (um degrau) e fica assim enquanto o bicho está perto. A etiqueta entra em fade de `D.curto` logo depois. |
+| **Conversa com o Ubiraçá** (4C) | A câmera vai até ele e dá zoom de 1,6× em `D.base` (`inOut`); as barras de cinema entram junto (12% da altura cada). A caixa entra em fade de 150 ms e o texto vem a 40 letras/s; E pula pro fim. Na saída, tudo volta pelo mesmo caminho. |
+| **Escolher a missão no casco** (5A) | Os cartões aparecem juntos, em fade de `D.curto`. |
+| **Comprar na lojinha** (6A) | O saldo troca na hora; o número cresce 35% e volta em `D.curto`, como o contador de sementes da fase. |
+| **Subir de nível** (7B) | A luz da cena pulsa uma vez (+120% por 250 ms). O bicho pula 4 px de arte. "+1 Força" (ou o atributo escolhido) sobe da cabeça em 800 ms e some. |
+| **Habilidade recarregando** (8B) | Um setor escuro gira e vai abrindo a tecla, como relógio, durante a recarga. |
+| **Ar do salão** (9B) | 70 vaga-lumes subindo devagar e balançando. |
 
 ### Fase, momentos raros
 
 | Momento | Receita |
 | --- | --- |
-| **Morrer e voltar** (7B) | A mesma cortina da trilha: fecha em 500 ms; o time vai pro checkpoint escondido; abre em 500 ms. É a mesma peça, um componente só. |
+| **Morrer e voltar** (7B) | Cortina de folhas fecha em 500 ms; o time vai pro checkpoint escondido; abre em 500 ms. É a mesma peça da entrada na trilha. |
 | **Checkpoint** (8B) | 6 quadros de crescimento a 6 fps (`D.longo`), 16 pétalas e 2 pássaros pousando na copa. Os pássaros ficam pousados até sair da tela. |
 | **Pausa** (12C) | Os bichos param; o capim e as pétalas seguem a 1/4 da velocidade; o fundo escurece a 45%; o título "Pausado" fica parado. |
 
@@ -83,37 +84,39 @@ O spec de cada uma é o da variação escolhida no laboratório.
 ## Movimento reduzido
 
 Toda receita tem a versão reduzida:
-- sem partícula, sem pássaro e sem tremor;
-- toda transição vira um fade de `D.reduzido` passando pelo escuro;
-- a placa acende num fade de `D.reduzido`;
+- sem partícula, sem vaga-lume, sem pássaro e sem tremor;
+- câmera não viaja: corta pro destino com um fade de `D.reduzido`;
+- as barras de cinema entram direto;
+- o texto da conversa aparece inteiro;
 - a cortina e o ipê crescendo pulam pro estado final;
-- as pétalas do ar somem.
+- o pulo e o pulso de luz do nível somem; o "+1" aparece parado.
 
 ## O que não fazer
 
-- **Mexer a interface pra dar resposta.** Placa e painel não deslizam, não quicam, não crescem. Quem se mexe é a folha. No laboratório, as variações em que a placa subia ou o painel descia no cipó perderam.
-- **Pôr a mata pra reagir no meio da ação.** Capim curvando na troca, flor abrindo na semente e pássaro fugindo no dano foram recusados: na hora do pulo a resposta tem que estar no bicho, sem atraso.
+- **Painel que desliza, quica ou cresce.** No hub, as variações em que os cartões subiam ou o item pulava perderam; a lista aparece e o número troca.
+- **Câmera brusca.** Toda viagem de câmera é `inOut`, nunca linear, e nunca mais rápida que `D.base`.
+- **Pôr a mata ou a câmera pra reagir no meio da ação.** Na missão, a resposta é do bicho e da HUD, sem atraso.
 - **Trocar o feedback da ação sem voltar ao laboratório.** Foi escolhido manter, não esquecido.
-- **Cortina diferente pra trilha e pra morte.** É a mesma peça.
-- **Partícula laranja como recompensa.** Laranja é fogo.
+- **Partícula laranja ou âmbar como recompensa na missão.** Laranja é fogo, e âmbar é a cor de "dá pra usar" da interface.
 
 ## Checklist de PR
 
-- [ ] O que se mexe é a mata ou o bicho, não a placa?
-- [ ] A pessoa está pulando quando isso acontece? Se sim, a resposta é imediata.
-- [ ] Os tempos e as quantidades vêm das fichas deste guia?
+- [ ] Quem se mexe é a câmera, o morador ou o bicho, não o painel?
+- [ ] A pessoa está jogando quando isso acontece? Se sim, a resposta é imediata.
+- [ ] Os tempos e as curvas vêm das fichas deste guia?
 - [ ] Tem a versão de movimento reduzido?
 - [ ] Se mexeu em troca, semente, coração ou retrato, voltou ao laboratório antes?
 
 ## Onde está no código
 
-- Fichas: `src/ui/tokens.ts` (`D`, `N`, `reducedMotion()`).
+- Fichas da fase: `src/ui/tokens.ts` (`D`, `N`, `reducedMotion()`).
 - Cortina de folhas: `src/ui/LeafCurtain.ts`.
-- Placa, painel e o ar da clareira: `src/scenes/LobbyScene.ts`.
+- Hub: `src/scenes/HubScene.ts` (`D_CAMERA` em `src/ui/tokens.ts`). Os laboratórios ficaram em `lab/hub.html` e `lab/movimento3d.html`, fora do git: são em 3D, então servem pro ritmo, não pro desenho.
 
 ## Escolhido e ainda não aplicado
 
-- **Morrer e voltar com a cortina (7B):** a peça já existe (`LeafCurtain`), mas a morte ainda volta na hora.
+- **Habilidade recarregando (8B, relógio varrendo):** as habilidades Q E R F X ainda não existem na fase.
+- **Morrer e voltar com a cortina (7B):** a peça já existe, mas a morte ainda volta na hora.
 - **Checkpoint mais lento e com pássaros (8B):** ainda está a 12 fps no jogo.
 - **Pausa com a mata respirando (12C):** hoje a PauseScene congela tudo e o título balança.
-- **Opção de movimento reduzido no menu:** o lobby e a cortina já respeitam o `prefers-reduced-motion` do sistema, mas o jogo ainda não tem a opção própria.
+- **Opção de movimento reduzido no menu:** o jogo só segue o `prefers-reduced-motion` do sistema.

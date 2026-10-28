@@ -30,7 +30,21 @@ export class Onca extends Hero {
     return this.dashing;
   }
 
+  get dashDirection(): 1 | -1 {
+    return this.dashDir;
+  }
+
   useAbility(ctx: HeroContext): void {
+    // ↓ + habilidade: cava o chão embaixo (terra sai, pedra não)
+    if (ctx.input.down) {
+      if (this.grounded && ctx.level.dig) {
+        const y = this.body.bottom + 4;
+        const left = ctx.level.dig(this.body.left + 6, y);
+        const right = ctx.level.dig(this.body.right - 6, y);
+        if (left || right) this.dust(0.5);
+      }
+      return;
+    }
     if (ctx.air.dashUsed || ctx.now < this.nextDashAt) return;
     ctx.air.dashUsed = true;
     ctx.air.canCut = false;

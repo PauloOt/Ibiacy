@@ -27,6 +27,8 @@ export interface AirState {
 export interface LevelQuery {
   isWater(x: number, y: number): boolean;
   isVine(x: number, y: number): boolean;
+  /** Cava o tile em (x, y) do mundo, se for terra. Só existe onde dá pra cavar. */
+  dig?(x: number, y: number): boolean;
 }
 
 export interface HeroContext {

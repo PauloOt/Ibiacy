@@ -2,21 +2,43 @@ import Phaser from 'phaser';
 import { GAME_HEIGHT, GAME_WIDTH, TILE } from '../config';
 import { hash2 } from '../art/rng';
 import { cellAt, connectedBreakables, parseLevel, type ParsedLevel } from '../core/levelParser';
+import { generateWorld, type World, type WorldOptions } from '../core/worldgen';
 import type { Hero, LevelQuery } from '../heroes/Hero';
 import { Lontra } from '../heroes/Lontra';
 import { Mico } from '../heroes/Mico';
 import { Onca } from '../heroes/Onca';
 import { Controls } from '../input/Controls';
-import { salaDeTeste } from '../levels/salaDeTeste';
 import { TeamManager } from '../team/TeamManager';
 import { LeafCurtain } from '../ui/LeafCurtain';
-import { buildParallax, buildTerrain, DEPTH, tileCenter, type Parallax } from './terrain';
+import { mmss, woodPanel } from '../ui/panel';
+import { buildParallax, DEPTH, tileCenter, type Parallax } from './terrain';
+import { WorldMap } from './worldmap';
+
+const RECORD_KEY = 'ibiacy-recorde';
+
+export interface GameData {
+  /** Veio do hub: começa com a cortina de folhas fechada */
+  curtain?: boolean;
+  /** Missão do Ubiraçá (volta pro hub com a recompensa dela) */
+  missao?: string;
+  /** Semente do mundo (a missão escolhe; sem ela vale ?semente=N ou uma aleatória) */
+  seed?: number;
+  /** Tamanho e trechos do mundo, por missão */
+  world?: Omit<WorldOptions, 'seed'>;
+}
 
 type Spr = Phaser.Physics.Arcade.Sprite;
 type Emitter = Phaser.GameObjects.Particles.ParticleEmitter;
 
 export class GameScene extends Phaser.Scene implements LevelQuery {
+  private world!: World;
   private level!: ParsedLevel;
+  private map!: WorldMap;
+  private metasDone = 0;
+  private startedAt = 0;
+  private finished = false;
+  private missao?: string;
+  private wasUp = false;
   private team!: TeamManager;
   private controls!: Controls;
   private parallax: Parallax[] = [];
@@ -32,16 +54,30 @@ export class GameScene extends Phaser.Scene implements LevelQuery {
     super('Game');
   }
 
-  /** `curtain`: veio do lobby pela trilha, então começa com a cortina de folhas fechada. */
-  create(data?: { curtain?: boolean }): void {
-    this.level = parseLevel(salaDeTeste);
+  create(data: GameData = {}): void {
+    const fromUrl = Number(new URLSearchParams(location.search).get('semente'));
+    const seed = data.seed ?? (fromUrl || Math.floor(Math.random() * 1e9));
+    this.world = generateWorld({ ...data.world, seed });
+    this.level = parseLevel(this.world.rows);
+    this.metasDone = 0;
+    this.finished = false;
+    this.missao = data.missao;
+    this.wasUp = false;
+    this.breakables.clear();
+    this.extinguished.clear();
+    this.seedsSinceCheckpoint = [];
+    console.info(`[ibiacy] mundo da semente ${seed}`);
     const worldW = this.level.width * TILE;
     const worldH = this.level.height * TILE;
     this.cameras.main.setBounds(0, 0, worldW, worldH);
     this.physics.world.setBounds(0, 0, worldW, worldH + TILE * 4);
 
     this.buildBackground();
-    const solids = buildTerrain(this, this.level);
+    this.map = new WorldMap(this, this.level, this.world.surface);
+    // Paredes invisíveis nas pontas do mundo (no céu também)
+    const edges = this.physics.add.staticGroup();
+    edges.add(this.add.zone(-TILE / 2, worldH / 2, TILE, worldH * 2));
+    edges.add(this.add.zone(worldW + TILE / 2, worldH / 2, TILE, worldH * 2));
     this.createEffects();
 
     const breakables = this.physics.add.staticGroup();
@@ -91,7 +127,8 @@ export class GameScene extends Phaser.Scene implements LevelQuery {
     const start = tileCenter(this.level.start);
     this.team = new TeamManager(heroes, { x: start.x, bottom: (this.level.start.ty + 1) * TILE });
 
-    this.physics.add.collider(heroes, solids);
+    this.physics.add.collider(heroes, edges);
+    this.physics.add.collider(heroes, this.map.front, undefined, (h, t) => this.onTerrain(h as Hero, t as Phaser.Tilemaps.Tile));
     this.physics.add.collider(heroes, breakables, undefined, (h, log) => this.onLogContact(h as Hero, log as Spr));
     this.physics.add.overlap(heroes, fires, (h, f) => this.onFire(h as Hero, f as Spr));
     this.physics.add.overlap(heroes, traps, (h, t) => this.onTrap(h as Hero, t as Spr));
@@ -105,6 +142,8 @@ export class GameScene extends Phaser.Scene implements LevelQuery {
     this.team.on('respawned', () => this.restoreSeeds());
     this.team.on('changed', () => this.registry.set('hud', this.team.snapshot()));
     this.registry.set('hud', this.team.snapshot());
+    this.registry.set('metas', { done: 0, total: this.world.metas });
+    this.startedAt = this.time.now;
     this.events.on('hero:dust', (x: number, y: number, strength: number) => this.fx.dust.explode(Math.round(3 + strength * 6), x, y - 2));
     this.follow();
 
@@ -123,6 +162,12 @@ export class GameScene extends Phaser.Scene implements LevelQuery {
 
   update(time: number, delta: number): void {
     const input = this.controls.read();
+    const upPressed = input.up && !this.wasUp;
+    this.wasUp = input.up;
+    if (this.finished) {
+      if (upPressed) this.backToHub();
+      return;
+    }
     if (input.pausePressed) {
       this.scene.pause();
       this.scene.launch('Pause');
@@ -148,6 +193,15 @@ export class GameScene extends Phaser.Scene implements LevelQuery {
 
   isVine(x: number, y: number): boolean {
     return cellAt(this.level, Math.floor(x / TILE), Math.floor(y / TILE)) === 'V';
+  }
+
+  /** A onça cava pra baixo (↓ + J): terra sai, pedra não. */
+  dig(x: number, y: number): boolean {
+    const tx = Math.floor(x / TILE);
+    const ty = Math.floor(y / TILE);
+    if (!this.map.dig(tx, ty)) return false;
+    this.fx.dust.explode(8, tx * TILE + TILE / 2, ty * TILE + TILE / 2);
+    return true;
   }
 
   // ---------- montagem ----------
@@ -238,18 +292,35 @@ export class GameScene extends Phaser.Scene implements LevelQuery {
       this.extinguished.add(`${Math.floor(fire.x / TILE)},${Math.floor(fire.y / TILE)}`);
       (fire.getData('glow') as Phaser.GameObjects.Image).destroy();
       fire.destroy();
+      this.metaDone();
       return;
     }
     this.team.hurt(this.time.now, fire.x);
   }
 
+  /**
+   * Contato com o chão do mundo. Onça em investida atravessa terra cavando o que está na frente
+   * (não o chão embaixo dela); pedra, copa e galho seguram normal.
+   */
+  private onTerrain(hero: Hero, tile: Phaser.Tilemaps.Tile): boolean {
+    if (!(hero instanceof Onca) || !hero.isDashing) return true;
+    const b = hero.body;
+    const ahead = hero.dashDirection > 0 ? tile.pixelX >= b.center.x : tile.pixelX + TILE <= b.center.x;
+    const beside = tile.pixelY < b.bottom - 4 && tile.pixelY + TILE > b.top + 4;
+    if (!ahead || !beside || !this.map.dig(tile.x, tile.y)) return true;
+    this.fx.dust.explode(6, tile.pixelX + TILE / 2, tile.pixelY + TILE / 2);
+    return false;
+  }
+
   private onTrap(hero: Hero, trap: Spr): void {
-    if (trap.getData('sprung')) return;
+    // A investida quebra até armadilha já fechada
     if (hero instanceof Onca && hero.isDashing) {
       this.fx.dust.explode(6, trap.x, trap.y + 10);
       trap.destroy();
+      this.metaDone();
       return;
     }
+    if (trap.getData('sprung')) return;
     if (this.team.trap(this.time.now, trap.x)) {
       trap.setData('sprung', true).setFrame(1);
     }
@@ -279,5 +350,48 @@ export class GameScene extends Phaser.Scene implements LevelQuery {
       (seed.getData('glow') as Phaser.GameObjects.Image).setVisible(true);
     }
     this.seedsSinceCheckpoint = [];
+  }
+
+  // ---------- metas e fim ----------
+
+  private metaDone(): void {
+    this.metasDone++;
+    this.registry.set('metas', { done: this.metasDone, total: this.world.metas });
+    if (this.metasDone >= this.world.metas) this.finish();
+  }
+
+  /** Todas as metas limpas: grava o recorde (se for o melhor tempo) e mostra o painel. */
+  private finish(): void {
+    this.finished = true;
+    const hero = this.team.active;
+    hero.setVelocity(0, hero.body.velocity.y);
+    const tempoMs = this.time.now - this.startedAt;
+    const sementes = this.team.state.seeds;
+    const total = this.level.seeds.length;
+    let best = true;
+    try {
+      const old = JSON.parse(localStorage.getItem(RECORD_KEY) ?? 'null') as { tempoMs: number } | null;
+      best = !old || tempoMs < old.tempoMs;
+      if (best) localStorage.setItem(RECORD_KEY, JSON.stringify({ tempoMs, sementes, total }));
+    } catch {
+      // Sem localStorage o recorde só não fica guardado
+    }
+    const panel = woodPanel(this, {
+      title: 'A mata está protegida',
+      rows: [['Tempo', mmss(tempoMs)], ['Sementes', `${sementes} / ${total}`]],
+      note: best ? 'Novo recorde!' : undefined,
+      button: '↑  Voltar',
+    }).setAlpha(0);
+    this.tweens.add({ targets: panel, alpha: 1, duration: 200 });
+  }
+
+  /** Volta pro hub com o que foi coletado; o hub dá a recompensa da missão. */
+  private backToHub(): void {
+    this.finished = false;
+    const resultado = { missao: this.missao, sementes: this.team.state.seeds };
+    new LeafCurtain(this).close().then(() => {
+      this.scene.stop('Hud');
+      this.scene.start('Hub', { resultado });
+    });
   }
 }

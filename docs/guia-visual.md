@@ -1,100 +1,108 @@
-# Guia visual da interface
+# Guia visual
 
-Saiu do laboratório do lobby em 28/10/2026, onde o mesmo lugar foi mostrado em quatro visuais e o Paulo escolheu o **fim de tarde na clareira**. Vale pro lobby, pras telas (Recorde, Créditos, pausa, final) e pras placas que aparecem na fase.
+Saiu do laboratório do hub em 28/10/2026. Lá, o mesmo salão dentro da árvore gigante foi mostrado com a mesma interface em quatro visuais, e o Paulo escolheu **o oco aceso pelos fungos**.
+
+Vale pro menu inicial, pro hub (lojinha, Ubiraçá, missões, ficha do herói) e pras telas por cima das missões. Ele substitui o guia do lobby da clareira (madeira, fim de tarde), que foi rejeitado: o problema era ser de lado e vazio.
 
 ## O princípio
 
-**A interface é feita da madeira do próprio lugar.** Placa pregada, tábua com veio, poste fincado no chão: nada de caixa flutuando. Se um elemento de interface não pudesse existir pendurado numa árvore da clareira, ele está errado.
+**O hub é a casa à noite, por dentro do tronco. A luz vem dos fungos, e a cor da luz deles é a cor do que se pode usar.**
 
-O lobby é o único lugar com luz de fim de tarde. A fase começa de manhã, então entrar na trilha é "o dia seguinte".
+Toda decisão sai daí:
+- a interface é casca entalhada, não caixa flutuando;
+- o que acende quando o bicho chega perto é âmbar, porque é o que os fungos fazem;
+- o resto fica no escuro quente da madeira.
+
+## A cena
+
+- **Pixel art em vista 3/4 de cima,** como Stardew e Soul Knight. O Paulo chegou a escolher "3D de verdade, pixelado", mas depois explicou que queria pixel art com profundidade, não 3D; o laboratório em Three.js ficou só como referência de luz e cor.
+- **O lugar:** o corte do tronco visto de cima e de frente:
+  - chão com os anéis da árvore numa elipse;
+  - parede de casca no fundo, com a rampa em espiral subindo;
+  - fungos de prateleira na parede e um nó da casca por onde entra um fio de luz;
+  - o oco continua pra cima, no escuro: é onde a câmera começa no menu.
+- **Quem mora lá:**
+  - **Ubiraçá**, o jabuti ancião, sobre um monte de musgo, com as trilhas das missões gravadas em dourado no casco;
+  - **o quati** atrás do balcão da lojinha, embaixo de um cogumelo de toldo, com potes em cima do tampo;
+  - **a bica d'água** da lontra.
+- **Os bichos** são os sprites de lado da fase, como no Soul Knight. O que está em casa fica parado: o mico em cima do toldo, a lontra na bica, a onça no meio.
+- **Luz:**
+  - a cena toda é multiplicada por `#6e5460` (noite);
+  - somam-se brilhos âmbar em cada fungo, luz clara no nó da casca, o brilho dos potes e da trilha no casco;
+  - o bicho ativo leva uma luz fraca junto, pra não perder as rosetas no escuro.
+- **No ar:** vaga-lumes `#ffd070`, somados.
+- **Profundidade:** quem tem o pé mais embaixo na tela passa na frente.
 
 ## Fichas
-
-Os números estão em pixels da tela do jogo (960×540). A arte é desenhada em pixels de 2×2, então toda espessura é par.
 
 ### Cores
 
 | Nome | Hex | Uso |
 | --- | --- | --- |
-| `madeira-escura` | `#3b2414` | contorno de toda placa, texto sobre placa clara |
-| `madeira` | `#8a5a32` | corpo da placa e do painel |
-| `madeira-clara` | `#c98e4a` | luz no topo da tábua, botão, placa ativa |
-| `madeira-sombra` | `#5e3a1e` | sombra na base da tábua, poste, linha tracejada |
-| `creme` | `#fbe7c0` | texto sobre madeira |
-| `ipe` | `#f2c230` | o que está ativo ou perto |
-| `ipe-claro` | `#ffe27a` | títulos e valores (tempo, sementes) |
-
-A luz da tarde vale só no lobby:
-- laranja `#ff9a5a` multiplicado a 32% sobre a cena;
-- brilho somado `#f2c230` a 28% em volta do ipê;
-- `#ffb070` a 20% no canto do sol.
+| `noite` | `#120a08` | fundo de tela e da cena |
+| `casca` | `#2a1810` | corpo dos painéis |
+| `veio` | `#6a4428` | borda dos painéis, trilho de barra, separador |
+| `seiva` | `#f3e2c8` | texto |
+| `cinza-casca` | `#b89878` | texto secundário (descrição, legenda) |
+| `ambar` | `#ffa040` | o que se pode usar ou está perto: tecla, botão em foco, etiqueta acesa, barra de XP |
+| `ambar-claro` | `#ffd070` | títulos e valores (preço, saldo, número de atributo) |
 
 ### Tipografia
 
-- **Jersey 10:** só títulos (o nome do jogo, o título de painel e o "Pausado").
+- **Jacquard 12:** só títulos (nome do jogo, título de painel, nome de quem fala, nome de missão).
 - **Pixelify Sans:** todo o resto.
 
-| Papel | Fonte | Tamanho |
+| Papel | Fonte | Tamanho (tela 960×540) |
 | --- | --- | --- |
-| Logo | Jersey 10 | 86 px, com 2 sombras duras pra baixo (`#8a3a14`, `#3b2414`) |
-| Título de painel | Jersey 10 | 40 px, `ipe-claro` (30 px ficava miúdo: a Jersey é estreita) |
-| Texto | Pixelify Sans | 18 px, `creme` |
-| Etiqueta e dica | Pixelify Sans | 16 px |
-| Detalhe (Fase 1, tecla) | Pixelify Sans | 13 px |
+| Logo | Jacquard 12 | 72 px, `ambar`, com brilho âmbar suave em volta |
+| Título de painel | Jacquard 12 | 30 px, `ambar-claro` |
+| Nome de quem fala, missão | Jacquard 12 | 22 a 26 px |
+| Texto | Pixelify Sans | 16 px |
+| Legenda, tecla | Pixelify Sans | 13 px |
 
 ### Forma
 
 - **Raio:** 0, em tudo.
-- **Contorno:** 4 px `madeira-escura`.
-- **Volume da tábua:**
-  - filete de 4 px `madeira-clara` por dentro, no topo;
-  - filete de 4 px `madeira-sombra` por dentro, na base;
-  - sombra dura de 6 px pra baixo (`#2a180c`) em painel grande.
-- **Separador de linha:** tracejado de 2 px em `madeira-sombra`.
+- **Painel:**
+  - fundo de casca com veio vertical (faixas de 7 px `#2a1810` e 2 px `#26150e`);
+  - borda de 3 px `veio`;
+  - por dentro, um filete escuro de 2 px e um filete âmbar de 2 px a 35%.
+- **Botão:**
+  - normal: borda de 3 px `veio`, fundo transparente;
+  - em foco: fundo `ambar` e texto `casca`.
+- **Barra (XP, vida):** trilho `veio`, enchimento `ambar`.
 
 ## Regra de cor
 
-1. **Amarelo-ipê só marca duas coisas:** o que está ativo ou perto (placa acesa, retrato do bicho atual, botão em foco) e valor (título, tempo, sementes). Se o amarelo está num enfeite, ele deixou de significar "isto aqui".
-2. **Laranja e vermelho nunca são cor de interface.** O fogo é a ameaça do jogo, e o laranja da tarde já está perto dele. A luz da tarde fica na cena, nunca numa placa ou botão.
+1. **Âmbar só no que se pode usar agora:** tecla, botão em foco, etiqueta do morador que está perto, missão selecionada, barra de XP. Se uma coisa âmbar não faz nada quando você aperta E, está errada.
+2. **Nada que machuca é âmbar.** O fogo das missões puxa pro vermelho (`#e8452a` pra baixo) e tem fumaça; o âmbar da interface nunca aparece em ameaça. É o risco desse visual: a cor da luz da casa é vizinha da cor da queimada.
 
 ## Receitas
 
-### Placa (etiqueta do lobby)
-
-É uma tábua com poste, fincada no chão ao lado do lugar que ela abre.
-- **Tábua:** padding 8×16 px, com tecla, nome e detalhe em linha. A tecla é um quadrado `creme` com o símbolo em `madeira-escura`.
-- **Poste:** 8 px de largura, `madeira-sombra` com contorno, descendo até o chão.
-- **Estados:** longe, a placa fica a 35% de opacidade e esconde o detalhe; perto, 100%. A transição está no [guia de movimento](guia-movimento.md).
-
-### Painel (Recorde, Créditos)
-
-Tábua grande, centrada, com cerca de metade da largura da tela.
-- Título em Jersey 10.
-- Linhas rótulo/valor separadas pelo tracejado.
-- Botões embaixo:
-  - normal: `madeira-clara` com contorno e sombra interna de 4 px;
-  - em foco: `ipe`.
-
-### Retrato do bicho (HUD)
-
-Tábua pequena com o bicho dentro.
-- **Ativo:** fundo `madeira-clara` e filete do topo em `ipe`.
-- **Inativo:** `madeira`, com o bicho a 65%.
+| Componente | Receita |
+| --- | --- |
+| **Menu inicial** | Logo em cima; Novo jogo, Carregar jogo e Créditos em coluna. O botão em foco é âmbar. Embaixo, uma legenda com o jogo salvo (herói, nível, sementes, quando). |
+| **Etiqueta de morador** | Painel pequeno preso no ponto 3D acima da cabeça dele, com tecla `E` e o nome da ação ("Falar com Ubiraçá", "Lojinha"). Longe: 50%. Perto: 100%, com borda âmbar. |
+| **Conversa** | Retrato de quem fala à esquerda, nome em Jacquard 12, fala em Pixelify Sans e "E continuar" embaixo. |
+| **Missões** ("Trilhas no casco") | Um cartão por missão, com nome, lugar, meta, quem leva e recompensa. A selecionada tem borda âmbar e o botão "Aceitar trilha". A trancada fica a 50% e diz o que falta. |
+| **Lojinha do quati** | Uma linha por item: nome, efeito, preço em sementes e Comprar. Sem sementes: linha a 55% e botão "Falta". Saldo embaixo. |
+| **Ficha do herói** | Nome e nível, barra de XP, os 5 atributos com `+` e as 5 habilidades (Q E R F X) com recarga. A recarga é um relógio varrendo. |
 
 ## O que não fazer
 
-- **Caixa escura translúcida.** É o visual de hoje da HUD e some em cima do céu claro; a madeira é opaca.
-- **Arredondar canto.** Pixel art com raio vira outro jogo.
-- **Uma terceira fonte.** Jersey 10 pra título, Pixelify pro resto.
-- **Placa sem contorno.** Sem os 4 px escuros ela se mistura com o tronco do ipê, que tem a mesma cor.
-
-## Onde está no código
-
-- Fichas: `src/ui/tokens.ts` (`WOOD`, `FONT_TITLE`, `FONT_TEXT`).
-- Tábua e tracejado: `src/ui/wood.ts`.
-- Placa, painel, título e luz da tarde: `src/scenes/LobbyScene.ts`.
-- Ipê grande e toca: `src/art/lobby.ts`.
+- **Caixa escura translúcida flutuando.** Painel é casca, opaco e com veio.
+- **Âmbar enfeitando.** Ele quer dizer "dá pra usar".
+- **Luz branca ou fria no hub.** Quebra a noite dentro do tronco; a cena só tem luz de fungo e de vaga-lume.
+- **Sprite sem tint.** No escuro ele aparece "colado" por cima da cena.
 
 ## Escolhido e ainda não aplicado
 
-- **A HUD e a pausa continuam com a caixa escura.** Passar elas pra madeira é uma decisão à parte: a madeira ocupa mais espaço em cima da fase.
+- **As telas da fase ainda são de madeira:** o painel de fim de missão (`src/ui/panel.ts`), a HUD e a pausa. Passar elas pro visual do oco é o próximo passo de interface.
+- **Os bichos não têm sprite de frente e de costas:** andam pra cima e pra baixo de lado, como no Soul Knight.
+
+## Onde está no código
+
+- Fichas: `src/ui/tokens.ts` (`OCO`, `FONT_HUB`).
+- Painel de casca, botão e barra: `src/ui/bark.ts`.
+- Arte do salão e dos moradores: `src/art/hub.ts`.
+- A cena: `src/scenes/HubScene.ts`.

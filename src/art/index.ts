@@ -1,9 +1,10 @@
 import type Phaser from 'phaser';
 import { GAME_HEIGHT, GAME_WIDTH } from '../config';
 import { bushLayer, canopyLayer, mountainLayer, skyLayer } from './background';
-import { addAnim, addCanvasTexture, addSheet, bakeHero } from './bake';
+import { addAnim, addCanvasTexture, addSheet, addTileset, bakeHero } from './bake';
 import { heroArts } from './heroes';
-import { bigIpeFrame, tocaFrame } from './lobby';
+import { basinFrame, hubRoomFrame, jabutiFrame, lojaFrame, moundFrame, quatiFrames } from './hub';
+import { TILESET, tilesetFrames } from './tileset';
 import {
   fireFrames,
   groundFrames,
@@ -23,6 +24,7 @@ export function bakeAll(scene: Phaser.Scene): void {
   for (const art of heroArts()) bakeHero(scene, art);
 
   addSheet(scene, 'ground', groundFrames());
+  addTileset(scene, 'tiles', tilesetFrames(), TILESET.cols);
   addSheet(scene, 'tuft', tuftFrames());
   for (let k = 0; k < 4; k++) addAnim(scene, `tuft-${k}`, 'tuft', [k * 3, k * 3 + 1, k * 3, k * 3 + 2], 3);
   addSheet(scene, 'log', logFrames());
@@ -40,8 +42,14 @@ export function bakeAll(scene: Phaser.Scene): void {
   addAnim(scene, 'sapling-idle', 'sapling', [0, 1], 2);
   addAnim(scene, 'sapling-grow', 'sapling', [2, 3, 4, 5, 6, 7], 12, false);
   addAnim(scene, 'tree-idle', 'sapling', [8, 9], 2);
-  addSheet(scene, 'ipe-grande', [bigIpeFrame()]);
-  addSheet(scene, 'toca', [tocaFrame()]);
+  // Hub (salão dentro da árvore)
+  addSheet(scene, 'hub-sala', [hubRoomFrame()]);
+  addSheet(scene, 'hub-loja', [lojaFrame()]);
+  addSheet(scene, 'hub-monte', [moundFrame()]);
+  addSheet(scene, 'hub-bica', [basinFrame()]);
+  addSheet(scene, 'jabuti', [jabutiFrame(0), jabutiFrame(1)]);
+  addSheet(scene, 'quati', quatiFrames());
+  addAnim(scene, 'quati-idle', 'quati', [0, 1, 2, 3], 4);
   addSheet(scene, 'heart', heartFrames());
   for (const [name, r] of Object.entries(particleFrames())) addSheet(scene, `p-${name}`, [r]);
 

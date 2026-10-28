@@ -86,6 +86,114 @@ export function groundFrames(): Raster[] {
   return out;
 }
 
+// ---------- mundo gerado: pedra, copa, galho, tronco e parede do subsolo ----------
+
+/** Índice no sheet 'stone': 16 combinações de lados expostos × STONE_VARIANTS. */
+export const STONE_VARIANTS = 3;
+export function stoneFrame(s: GroundSides, variant: number): number {
+  const combo = (s.top ? 1 : 0) | (s.bottom ? 2 : 0) | (s.left ? 4 : 0) | (s.right ? 8 : 0);
+  return combo * STONE_VARIANTS + (variant % STONE_VARIANTS);
+}
+
+function stoneTile(s: GroundSides, variant: number): Raster {
+  const r = new Raster(T, T);
+  const rand = rng(2000 + variant * 53);
+  r.rect(0, 0, T, T, STONE.lo);
+  // Blocos de pedra encaixados, com luz em cima
+  for (let i = 0; i < 5; i++) r.ellipse(rand() * T, rand() * T, 3 + rand() * 3, 2 + rand() * 2, STONE, { grain: 0.15 });
+  // Fendas
+  let x = rand() * T;
+  for (let y = 0; y < T; y++) {
+    x += rand() < 0.5 ? -0.6 : 0.6;
+    if (rand() < 0.7) r.set(x, y, STONE.deep);
+  }
+  if (s.left) for (let y = 0; y < T; y++) r.set(0, y, STONE.deep);
+  if (s.right) for (let y = 0; y < T; y++) r.set(T - 1, y, STONE.deep);
+  if (s.bottom) for (let x2 = 0; x2 < T; x2++) r.set(x2, T - 1, STONE.deep);
+  if (s.top) {
+    // Musgo por cima da pedra exposta
+    for (let x2 = 0; x2 < T; x2++) {
+      const depth = 1 + Math.round(rand() * 1.5 + Math.sin(x2 * 1.1 + variant));
+      for (let y = 0; y < depth; y++) r.set(x2, y, y === 0 ? MOSS.hi : MOSS.base);
+      r.set(x2, depth, STONE.hi);
+    }
+  }
+  return r;
+}
+
+export function stoneFrames(): Raster[] {
+  const out: Raster[] = [];
+  for (let combo = 0; combo < 16; combo++) {
+    const s = { top: !!(combo & 1), bottom: !!(combo & 2), left: !!(combo & 4), right: !!(combo & 8) };
+    for (let v = 0; v < STONE_VARIANTS; v++) out.push(stoneTile(s, v));
+  }
+  return out;
+}
+
+/** Copa que dá pra pisar: 0 ponta esquerda, 1–2 meio, 3 ponta direita. */
+export function canopyFrames(): Raster[] {
+  return [0, 1, 2, 3].map((kind) => {
+    const r = new Raster(T, T);
+    const rand = rng(3000 + kind);
+    const x0 = kind === 0 ? 4 : -2;
+    const x1 = kind === 3 ? 12 : T + 2;
+    for (let i = 0; i < 9; i++) {
+      const cx = x0 + rand() * (x1 - x0);
+      r.ellipse(cx, 4 + rand() * 9, 3 + rand() * 2.5, 2.5 + rand() * 2, LEAF, { grain: 0.2 });
+    }
+    // Pontos de luz no topo
+    for (let i = 0; i < 6; i++) r.paint(x0 + rand() * (x1 - x0), 2 + rand() * 3, LEAF.hi);
+    return r.outline();
+  });
+}
+
+/** Galho que dá pra pisar: 0 ponta esquerda, 1 meio, 2 ponta direita. */
+export function branchFrames(): Raster[] {
+  return [0, 1, 2].map((kind) => {
+    const r = new Raster(T, T);
+    const x0 = kind === 0 ? 3 : 0;
+    const x1 = kind === 2 ? 12 : T;
+    for (let x = x0; x < x1; x++) {
+      const taper = kind === 0 ? (x - x0) / 6 : kind === 2 ? (x1 - x) / 6 : 1;
+      const h = 2 + Math.round(Math.min(1, taper) * 2);
+      for (let y = 0; y < h; y++) r.set(x, 2 + y, y === 0 ? BARK.hi : y === h - 1 ? BARK.lo : BARK.base);
+    }
+    if (kind === 2) r.ellipse(12.5, 2, 2, 1.3, LEAF);
+    return r.outline();
+  });
+}
+
+/** Tronco de fundo (não colide): 4 variações que emendam em cima e embaixo. */
+export function trunkFrames(): Raster[] {
+  return [0, 1, 2, 3].map((v) => {
+    const r = new Raster(T, T);
+    const rand = rng(4000 + v);
+    for (let y = 0; y < T; y++) for (let x = 4; x < 12; x++) {
+      const stripe = (x + Math.floor(Math.sin(y * 0.35 + v) * 1.4)) % 3 === 0;
+      r.set(x, y, x === 4 ? BARK.hi : x === 11 ? BARK.deep : stripe ? BARK.lo : BARK.base);
+    }
+    if (rand() < 0.5) r.ellipse(8, 4 + rand() * 8, 1.5, 1.2, { ...BARK, base: BARK.deep, hi: BARK.lo }, { flat: true });
+    return r;
+  });
+}
+
+/** Parede do subsolo, atrás das cavernas: 0–3 terra, 4–7 pedra. Escura, sem contorno. */
+export function wallFrames(): Raster[] {
+  const out: Raster[] = [];
+  for (const tone of [DIRT, STONE]) {
+    for (let v = 0; v < 4; v++) {
+      const r = new Raster(T, T);
+      const rand = rng(5000 + v + (tone === STONE ? 10 : 0));
+      const dark = (c: Color) => mix(c, 0x1a1020, 0.55);
+      r.rect(0, 0, T, T, dark(tone.lo));
+      for (let i = 0; i < 4; i++) r.ellipse(rand() * T, rand() * T, 2 + rand() * 3, 1.5 + rand() * 2, { hi: dark(tone.base), base: dark(tone.base), lo: dark(tone.lo), deep: dark(tone.deep) }, { flat: true });
+      for (let i = 0; i < 5; i++) r.set(rand() * T, rand() * T, dark(tone.deep));
+      out.push(r);
+    }
+  }
+  return out;
+}
+
 // ---------- enfeites da grama (ficam em cima do tile, balançando) ----------
 
 const FLOWERS: Color[] = [0xfff3d0, 0xf7d23e, 0xe86a9a, 0xb38cf0];

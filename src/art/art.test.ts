@@ -4,9 +4,8 @@ import { heroArts } from './heroes';
 import { Raster } from './raster';
 import { GROUND_VARIANTS, groundFrame, groundFrames, saplingFrames, tuftFrames, waterFrames } from './world';
 import { ramp } from './color';
-import { bigIpeFrame, tocaFrame } from './lobby';
-import { parseLevel } from '../core/levelParser';
-import { lobby } from '../levels/lobby';
+import { HUB_FUNGI, HUB_H, HUB_W, hubRoomFrame, jabutiFrame, lojaFrame, quatiFrames } from './hub';
+import { TILESET, tilesetFrames } from './tileset';
 
 describe('Raster', () => {
   it('elipse pinta dentro e contorno fica só por fora', () => {
@@ -74,20 +73,29 @@ describe('mundo', () => {
   });
 });
 
-describe('lobby', () => {
-  it('ipê e toca têm desenho e pé na última linha', () => {
-    for (const r of [bigIpeFrame(), tocaFrame()]) {
-      expect(r.opaqueCount()).toBeGreaterThan(500);
+describe('hub', () => {
+  it('o fundo do salão é cheio e os fungos ficam dentro dele', () => {
+    const room = hubRoomFrame();
+    expect(room.opaqueCount()).toBe(HUB_W * HUB_H);
+    for (const [x, y] of HUB_FUNGI) expect(x > 0 && x < HUB_W && y > 0 && y < HUB_H).toBe(true);
+  });
+
+  it('moradores e lojinha têm desenho e pé na última linha', () => {
+    for (const r of [lojaFrame(), jabutiFrame(0), jabutiFrame(1), ...quatiFrames()]) {
+      expect(r.opaqueCount()).toBeGreaterThan(100);
       let base = 0;
       for (let x = 0; x < r.w; x++) if (r.get(x, r.h - 1) !== null) base++;
       expect(base).toBeGreaterThan(0);
     }
   });
+});
 
-  it('o mapa do lobby é uma tela com chão inteiro e início', () => {
-    const lvl = parseLevel(lobby);
-    expect([lvl.width, lvl.height]).toEqual([30, 17]);
-    expect(lvl.start).toEqual({ tx: 11, ty: 12 });
-    expect(lvl.solids[0]).toMatchObject({ tx: 0, ty: 13, w: 30 });
+describe('tileset do mundo', () => {
+  it('cada grupo começa onde o índice diz e todo frame é um tile', () => {
+    const frames = tilesetFrames();
+    expect(frames).toHaveLength(TILESET.count);
+    for (const f of frames) expect([f.w, f.h]).toEqual([16, 16]);
+    expect(TILESET.stone).toBe(16 * 6);
+    expect(TILESET.canopy).toBe(TILESET.stone + 16 * 3);
   });
 });

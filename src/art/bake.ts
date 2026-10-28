@@ -66,3 +66,15 @@ export function addCanvasTexture(scene: Phaser.Scene, key: string, w: number, h:
   paint(canvas.getContext('2d')!);
   scene.textures.addCanvas(key, canvas);
 }
+
+/** Tileset pro Tilemap: frames numa grade de `cols` colunas, cada um do tamanho de um tile do mundo. */
+export function addTileset(scene: Phaser.Scene, key: string, frames: readonly Raster[], cols: number, scale = ART_SCALE): void {
+  const tw = frames[0].w * scale;
+  const th = frames[0].h * scale;
+  const canvas = document.createElement('canvas');
+  canvas.width = cols * tw;
+  canvas.height = Math.ceil(frames.length / cols) * th;
+  const ctx = canvas.getContext('2d')!;
+  frames.forEach((f, i) => ctx.drawImage(rasterStrip([f], scale), (i % cols) * tw, Math.floor(i / cols) * th));
+  scene.textures.addCanvas(key, canvas);
+}
